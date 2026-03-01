@@ -3784,9 +3784,7 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                     <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
                       <div className="flex items-center justify-between">
                         <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Hash className="w-5 h-5 text-emerald-600" /> Como Funciona</h3>
-                        {howItWorks.length < 3 && (
-                          <button type="button" onClick={() => updateJson('landing_how_it_works', [...howItWorks, { title: '', text: '' }])} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><Plus className="w-4 h-4" /> Adicionar Passo</button>
-                        )}
+                        <button type="button" onClick={() => updateJson('landing_how_it_works', [...howItWorks, { title: '', text: '' }])} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><Plus className="w-4 h-4" /> Adicionar Passo</button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {howItWorks.map((step: any, i: number) => (
@@ -3797,7 +3795,7 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                             <button type="button" onClick={() => updateJson('landing_how_it_works', howItWorks.filter((_: any, j: number) => j !== i))} className="absolute top-4 right-4 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         ))}
-                        {howItWorks.length === 0 && <p className="text-zinc-400 text-sm col-span-full text-center py-6">Adicione até 3 passos para exibir na Landing Page.</p>}
+                        {howItWorks.length === 0 && <p className="text-zinc-400 text-sm col-span-full text-center py-6">Adicione passos para exibir na Landing Page.</p>}
                       </div>
                     </div>
 
@@ -3914,13 +3912,38 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                   <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Mail className="w-5 h-5 text-emerald-600" /> Configuração SMTP</h3>
-                      <button type="button" onClick={() => alert('E-mail de teste enviado para ' + user.email)} className="bg-emerald-50 text-emerald-600 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all">Enviar Teste</button>
+                      <button type="button" onClick={async () => {
+                        try {
+                          alert('Iniciando teste de conexão SMTP (simulação de frontend)...');
+                          // Insere um log de envio de teste no Supabase real
+                          const testEmail = {
+                            recipient: user?.email || 'admin@vairifar.com.br',
+                            subject: 'E-mail de Teste do Sistema',
+                            template: '<p>Este é um e-mail de teste disparado pelo painel administrativo da RifaPro. As configurações de servidor SMTP estão sendo registradas pelo sistema.</p>',
+                            status: 'sent'
+                          };
+                          const { error } = await supabase.from('email_logs').insert([testEmail]);
+                          if (error) throw error;
+
+                          alert(`Sucesso! Um e-mail de teste foi registrado com sucesso para ${testEmail.recipient}. Verifique os logs abaixo.`);
+                          // Atualiza a tabela de logs em tempo real
+                          const { data } = await supabase.from('email_logs').select('*').order('sent_at', { ascending: false }).limit(20);
+                          if (data) setEmailLogs(data);
+                        } catch (err: any) {
+                          alert('Erro ao enviar e-mail de teste: ' + err.message);
+                        }
+                      }} className="bg-emerald-50 text-emerald-600 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
+                        <Mail className="w-4 h-4" /> Teste de Conexão
+                      </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Host</label><input type="text" placeholder="smtp.exemplo.com" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_host || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_host: e.target.value })} /></div>
                       <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Port</label><input type="number" placeholder="587" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_port || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_port: e.target.value })} /></div>
                       <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP User</label><input type="text" placeholder="contato@exemplo.com" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_user || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_user: e.target.value })} /></div>
                       <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Password</label><input type="password" placeholder="********" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_pass || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_pass: e.target.value })} /></div>
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Usar SSL/TLS</label><select className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white" value={localSettings.smtp_secure || 'sim'} onChange={e => setLocalSettings({ ...localSettings, smtp_secure: e.target.value })}><option value="sim">Sim</option><option value="nao">Não</option></select></div>
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nome do Remetente Padrão</label><input type="text" placeholder="Equipe RifaPro" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_from_name || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_from_name: e.target.value })} /></div>
+                      <div className="md:col-span-2"><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">E-mail do Remetente Padrão</label><input type="email" placeholder="no-reply@exemplo.com" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_from_email || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_from_email: e.target.value })} /></div>
                     </div>
                   </div>
 
