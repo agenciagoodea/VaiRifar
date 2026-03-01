@@ -3739,13 +3739,12 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                             <input type="file" id="logo-upload-admin" className="hidden" accept="image/*" onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
-                              try {
-                                const fileName = `logo-${Date.now()}.${file.name.split('.').pop()}`;
-                                const { error: upErr } = await supabase.storage.from('logos').upload(fileName, file);
-                                if (upErr) throw upErr;
-                                const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(fileName);
-                                setLocalSettings({ ...localSettings, site_logo_url: publicUrl });
-                              } catch (err: any) { alert('Erro ao carregar logo: ' + err.message); }
+                              if (file.size > 500000) { alert('A imagem deve ter no máximo 500KB.'); return; }
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                setLocalSettings({ ...localSettings, site_logo_url: reader.result as string });
+                              };
+                              reader.readAsDataURL(file);
                             }} />
                             <button type="button" onClick={() => document.getElementById('logo-upload-admin')?.click()} className="px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
                               <Upload className="w-4 h-4" /> Enviar Logo
