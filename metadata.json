@@ -1,0 +1,7 @@
+{
+  "name": "RifaPro SaaS",
+  "description": "Plataforma avançada de criação e gestão de rifas online com foco em alta conversão e escalabilidade.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
