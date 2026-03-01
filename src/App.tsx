@@ -4396,19 +4396,20 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                             if (error) console.log('Aviso payments:', error.message);
                           });
 
-                          const { error: deleteCampaignError, data: deletedData } = await supabase
+                          const { error: deleteCampaignError } = await supabase
                             .from('campaigns')
                             .delete()
-                            .eq('id', c.id)
-                            .select(); // Força o retorno para confirmar exclusão
+                            .eq('id', c.id);
 
                           if (deleteCampaignError) {
                             console.error('Erro REAL ao excluir campanha no banco:', deleteCampaignError);
                             throw new Error(`Falha no Supabase: ${deleteCampaignError.message}. Detalhes: ${deleteCampaignError.details}`);
                           }
 
-                          if (!deletedData || deletedData.length === 0) {
-                            throw new Error('Campanha não encontrada ou não pôde ser excluída. Verifique restrições no banco.');
+                          // Verifica se a exclusão foi realmente efetivada (pois o RLS pode bloquear silenciosamente)
+                          const { data: stillExists } = await supabase.from('campaigns').select('id').eq('id', c.id).single();
+                          if (stillExists) {
+                            throw new Error('Campanha não pôde ser excluída. Verifique restrições de permissão RLS no banco.');
                           }
 
                           alert('Campanha excluída com sucesso!');
@@ -4472,19 +4473,20 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                         if (error) console.log('Aviso payments:', error.message);
                       });
 
-                      const { error: deleteCampaignError, data: deletedData } = await supabase
+                      const { error: deleteCampaignError } = await supabase
                         .from('campaigns')
                         .delete()
-                        .eq('id', c.id)
-                        .select(); // Força o retorno para confirmar exclusão
+                        .eq('id', c.id);
 
                       if (deleteCampaignError) {
                         console.error('Erro REAL ao excluir campanha no banco:', deleteCampaignError);
                         throw new Error(`Falha no Supabase: ${deleteCampaignError.message}. Detalhes: ${deleteCampaignError.details}`);
                       }
 
-                      if (!deletedData || deletedData.length === 0) {
-                        throw new Error('Campanha não encontrada ou não pôde ser excluída. Verifique restrições no banco.');
+                      // Verifica se a exclusão foi realmente efetivada (pois o RLS pode bloquear silenciosamente)
+                      const { data: stillExists } = await supabase.from('campaigns').select('id').eq('id', c.id).single();
+                      if (stillExists) {
+                        throw new Error('Campanha não pôde ser excluída. Verifique restrições de permissão RLS no banco.');
                       }
 
                       alert('Campanha excluída com sucesso!');
