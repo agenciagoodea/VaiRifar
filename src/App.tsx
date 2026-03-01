@@ -48,7 +48,16 @@ import {
   ChevronDown,
   Trash2,
   Copy,
-  ExternalLink
+  ExternalLink,
+  HelpCircle,
+  Globe,
+  Star,
+  Hash,
+  Zap,
+  ChevronUp,
+  FileText,
+  Link2,
+  BarChart3
 } from 'lucide-react';
 import type { Campaign, User, Order } from './types';
 import { supabase } from './lib/supabase';
@@ -531,9 +540,11 @@ const Navbar = ({ user, onLogout, onNavigate, settings }: { user: User | null, o
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate('home')}>
-            <div className="bg-emerald-600 p-2 rounded-lg">
-              <Ticket className="text-white w-6 h-6" />
-            </div>
+            {settings?.site_logo_url ? (
+              <img src={settings.site_logo_url} alt="Logo" className="h-9 w-auto object-contain" />
+            ) : (
+              <div className="bg-emerald-600 p-2 rounded-lg"><Ticket className="text-white w-6 h-6" /></div>
+            )}
             <span className="text-xl font-bold tracking-tight text-zinc-900">{settings?.site_name || 'RifaPro'}</span>
           </div>
 
@@ -1808,25 +1819,26 @@ const ManageCampaign = ({ campaign, onBack, onView, onEdit, globalSettings, onRe
 
 // --- Pages ---
 
-const HomePage = ({ campaigns, onSelectCampaign }: { campaigns: Campaign[], onSelectCampaign: (c: Campaign) => void }) => {
+const HomePage = ({ campaigns, onSelectCampaign, settings }: { campaigns: Campaign[], onSelectCampaign: (c: Campaign) => void, settings: any }) => {
   const activeCampaigns = campaigns.filter(c => c.status === 'active');
   const finishedCampaigns = campaigns.filter(c => c.status === 'finished');
-
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const howItWorks = (() => { try { return JSON.parse(settings?.landing_how_it_works || '[]'); } catch { return []; } })();
+  const features = (() => { try { return JSON.parse(settings?.landing_features || '[]'); } catch { return []; } })();
+  const faqItems = (() => { try { return JSON.parse(settings?.landing_faq || '[]'); } catch { return []; } })();
+  const ctaText = settings?.landing_cta_text || 'Aqui você cria a sua campanha e recebe a arrecadação diretamente em sua conta!';
+  const iconMap: Record<string, any> = { Shield, Zap, Star, Globe, Users, CheckCircle2, Rocket, Gift, DollarSign, Ticket, Clock, Eye };
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-24">
-      {/* Seção Ganhadores Recentes */}
       {finishedCampaigns.length > 0 && (
         <section className="animate-in fade-in slide-in-from-top-8 duration-700">
           <div className="flex items-center gap-4 mb-10">
-            <div className="bg-yellow-400 p-3 rounded-2xl shadow-lg shadow-yellow-100">
-              <Gift className="w-6 h-6 text-white" />
-            </div>
+            <div className="bg-yellow-400 p-3 rounded-2xl shadow-lg shadow-yellow-100"><Gift className="w-6 h-6 text-white" /></div>
             <div>
               <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Ganhadores Recentes</h2>
               <p className="text-zinc-400 font-medium">Confira quem já levou os prêmios pra casa!</p>
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {finishedCampaigns.slice(0, 4).map((c) => {
               const winners = (c as any).winners || [];
@@ -1835,21 +1847,13 @@ const HomePage = ({ campaigns, onSelectCampaign }: { campaigns: Campaign[], onSe
                 <div key={c.id} className="glass-card p-6 border-yellow-200/50 bg-gradient-to-br from-white to-yellow-50/30 group hover:scale-[1.02] transition-all cursor-pointer" onClick={() => onSelectCampaign(c)}>
                   <div className="relative mb-6">
                     <img src={c.image_url} alt={c.title} className="w-full h-32 object-cover rounded-2xl grayscale group-hover:grayscale-0 transition-all opacity-40" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-3xl font-black text-yellow-500 shadow-xl border-4 border-yellow-400">
-                        {firstWinner?.number || '---'}
-                      </div>
-                    </div>
-                    <div className="absolute -top-2 -right-2 bg-zinc-900 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
-                      Encerrada
-                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center"><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-3xl font-black text-yellow-500 shadow-xl border-4 border-yellow-400">{firstWinner?.number || '---'}</div></div>
+                    <div className="absolute -top-2 -right-2 bg-zinc-900 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Encerrada</div>
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em] mb-1">{c.title}</p>
                     <h3 className="text-xl font-black text-zinc-900 truncate">{firstWinner?.customer || 'Sorteado'}</h3>
-                    <p className="text-[10px] font-bold text-yellow-600 bg-yellow-100 inline-block px-3 py-1 rounded-lg mt-2 uppercase">
-                      {firstWinner?.prize_name || 'Prêmio'}
-                    </p>
+                    <p className="text-[10px] font-bold text-yellow-600 bg-yellow-100 inline-block px-3 py-1 rounded-lg mt-2 uppercase">{firstWinner?.prize_name || 'Prêmio'}</p>
                   </div>
                 </div>
               );
@@ -1857,35 +1861,77 @@ const HomePage = ({ campaigns, onSelectCampaign }: { campaigns: Campaign[], onSe
           </div>
         </section>
       )}
-
       <section>
         <header className="mb-12 text-center max-w-2xl mx-auto">
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-4xl md:text-5xl font-black text-zinc-900 tracking-tight mb-4"
-          >
+          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-4xl md:text-5xl font-black text-zinc-900 tracking-tight mb-4">
             Participe dos Melhores <span className="text-emerald-600">Sorteios Online</span>
           </motion.h1>
           <p className="text-zinc-500 text-lg">Campanhas auditadas, seguras e com premiações incríveis. Escolha sua sorte!</p>
         </header>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {activeCampaigns.map((campaign) => (
-            <CampaignCard key={campaign.id} campaign={campaign} onClick={() => onSelectCampaign(campaign)} />
-          ))}
-
+          {activeCampaigns.map((campaign) => (<CampaignCard key={campaign.id} campaign={campaign} onClick={() => onSelectCampaign(campaign)} />))}
           {activeCampaigns.length === 0 && (
             <div className="col-span-full py-20 text-center">
-              <div className="w-24 h-24 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Ticket className="w-10 h-10 text-zinc-300" />
-              </div>
+              <div className="w-24 h-24 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-6"><Ticket className="w-10 h-10 text-zinc-300" /></div>
               <h3 className="text-xl font-black text-zinc-900 mb-2">Nenhuma campanha ativa no momento</h3>
               <p className="text-zinc-400">Volte em breve para novas oportunidades!</p>
             </div>
           )}
         </div>
       </section>
+      {howItWorks.length > 0 && (
+        <section>
+          <div className="text-center mb-12"><h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Como Funciona</h2><p className="text-zinc-500 mt-2">É simples e rápido participar!</p></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {howItWorks.map((step: any, i: number) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.15 }} className="text-center p-8 bg-white rounded-3xl border border-zinc-100 shadow-sm hover:shadow-lg transition-all">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-black text-2xl mx-auto mb-6">{i + 1}</div>
+                <h3 className="text-xl font-bold text-zinc-900 mb-3">{step.title}</h3>
+                <p className="text-zinc-500 text-sm">{step.text}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
+      {features.length > 0 && (
+        <section>
+          <div className="text-center mb-12"><h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Funcionalidades</h2><p className="text-zinc-500 mt-2">Tudo que você precisa em uma plataforma.</p></div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+            {features.map((feat: any, i: number) => {
+              const Ic = iconMap[feat.icon] || Star; return (
+                <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.1 }} className="text-center p-6 bg-white rounded-3xl border border-zinc-100 shadow-sm hover:shadow-lg hover:scale-105 transition-all">
+                  <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-600"><Ic className="w-6 h-6" /></div>
+                  <p className="font-bold text-zinc-900 text-sm">{feat.title}</p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      <section className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-[2.5rem] p-12 md:p-16 text-center text-white relative overflow-hidden">
+        <div className="relative z-10">
+          <h2 className="text-3xl md:text-4xl font-black mb-4">{ctaText}</h2>
+          <p className="text-emerald-100 mb-8 max-w-lg mx-auto">Crie sua campanha agora e comece a arrecadar de forma segura e transparente.</p>
+          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="bg-white text-emerald-700 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-emerald-50 transition-all shadow-xl">Criar Minha Campanha</button>
+        </div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 blur-[100px] rounded-full -mr-48 -mt-48"></div>
+      </section>
+      {faqItems.length > 0 && (
+        <section>
+          <div className="text-center mb-12"><h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Dúvidas Frequentes</h2><p className="text-zinc-500 mt-2">Tire suas dúvidas sobre a plataforma.</p></div>
+          <div className="max-w-3xl mx-auto space-y-4">
+            {faqItems.map((faq: any, i: number) => (
+              <div key={i} className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full px-8 py-5 text-left flex items-center justify-between hover:bg-zinc-50 transition-all">
+                  <span className="font-bold text-zinc-900">{faq.question}</span>
+                  <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
+                </button>
+                {openFaq === i && <div className="px-8 pb-6 text-zinc-500 text-sm leading-relaxed border-t border-zinc-50 pt-4">{faq.answer}</div>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };
@@ -3370,9 +3416,12 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'settings'>('stats');
-  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'payments' | 'taxes' | 'email'>('general');
+  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'payments' | 'taxes' | 'email' | 'mercadopago'>('general');
   const [localSettings, setLocalSettings] = useState<any>(globalSettings);
   const [selectedTemplate, setSelectedTemplate] = useState('order_paid');
+  const [emailLogs, setEmailLogs] = useState<any[]>([]);
+  const [campaignPayments, setCampaignPayments] = useState<any[]>([]);
+  const [paymentsFilter, setPaymentsFilter] = useState('all');
 
   useEffect(() => {
     setLocalSettings(globalSettings);
@@ -3464,6 +3513,15 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
     }
   };
 
+  const parseJson = (key: string) => { try { return JSON.parse(localSettings[key] || '[]'); } catch { return []; } };
+  const updateJson = (key: string, val: any) => setLocalSettings({ ...localSettings, [key]: JSON.stringify(val) });
+  const ICON_OPTIONS = ['Shield', 'Zap', 'Star', 'Globe', 'Users', 'CheckCircle2', 'Rocket', 'Gift', 'DollarSign', 'Ticket', 'Clock', 'Eye'];
+  const renderIconByName = (name: string) => {
+    const icons: Record<string, any> = { Shield, Zap, Star, Globe, Users, CheckCircle2, Rocket, Gift, DollarSign, Ticket, Clock, Eye };
+    const Ic = icons[name] || Star;
+    return <Ic className="w-5 h-5" />;
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'stats':
@@ -3471,61 +3529,91 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
           <div className="space-y-8">
             <header>
               <h1 className="text-3xl font-black text-zinc-900 mb-2">Financeiro</h1>
-              <p className="text-zinc-500">Acompanhe o desempenho global da plataforma RifaPro.</p>
+              <p className="text-zinc-500">Acompanhe o desempenho global e os pagamentos de ativação de campanhas.</p>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-8 rounded-3xl border border-zinc-100 shadow-sm border-l-8 border-emerald-500">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="p-3 bg-emerald-50 rounded-2xl">
-                    <DollarSign className="text-emerald-600 w-6 h-6" />
-                  </div>
+                  <div className="p-3 bg-emerald-50 rounded-2xl"><DollarSign className="text-emerald-600 w-6 h-6" /></div>
                   <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Volume Total (Campanhas)</p>
                 </div>
                 <p className="text-3xl font-black text-zinc-900">R$ {(stats?.total_revenue || 0).toFixed(2)}</p>
               </div>
-
               <div className="bg-white p-8 rounded-3xl border border-zinc-100 shadow-sm border-l-8 border-blue-500">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="p-3 bg-blue-50 rounded-2xl">
-                    <Users className="text-blue-600 w-6 h-6" />
-                  </div>
+                  <div className="p-3 bg-blue-50 rounded-2xl"><Users className="text-blue-600 w-6 h-6" /></div>
                   <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Organizadores</p>
                 </div>
                 <p className="text-3xl font-black text-zinc-900">{stats?.total_organizers || 0}</p>
               </div>
-
               <div className="bg-white p-8 rounded-3xl border border-zinc-100 shadow-sm border-l-8 border-purple-500">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="p-3 bg-purple-50 rounded-2xl">
-                    <Ticket className="text-purple-600 w-6 h-6" />
-                  </div>
+                  <div className="p-3 bg-purple-50 rounded-2xl"><Ticket className="text-purple-600 w-6 h-6" /></div>
                   <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Rifas Criadas</p>
                 </div>
                 <p className="text-3xl font-black text-zinc-900">{stats?.total_campaigns || 0}</p>
               </div>
             </div>
 
-            <div className="bg-zinc-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden">
-              <div className="relative z-10 space-y-6">
-                <div>
-                  <h3 className="text-2xl font-black mb-2">Integração Mercado Pago</h3>
-                  <p className="text-zinc-400 font-medium max-w-md">Sistema configurado para processamento automático e split de taxas.</p>
-                </div>
-                <div className="flex gap-4">
-                  <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Status API</p>
-                    <p className="font-bold flex items-center gap-2">
-                      <span className="w-2 h-2 bg-emerald-500 rounded-full"></span> Online
-                    </p>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Split</p>
-                    <p className="font-bold">Ativado</p>
-                  </div>
+            {/* Pagamentos de Ativação */}
+            <div className="bg-white rounded-[2.5rem] border border-zinc-100 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-zinc-100 flex items-center justify-between">
+                <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Banknote className="w-5 h-5 text-emerald-600" /> Pagamentos de Ativação</h3>
+                <div className="flex gap-2">
+                  <button type="button" onClick={async () => {
+                    const { data } = await supabase.from('campaign_payments').select('*, campaigns(title), profiles(name, email)').order('created_at', { ascending: false });
+                    if (data) setCampaignPayments(data);
+                  }} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><RefreshCcw className="w-3 h-3" /> Atualizar</button>
+                  <select className="h-10 rounded-xl border border-zinc-200 px-3 text-xs font-bold bg-white outline-none" value={paymentsFilter} onChange={e => setPaymentsFilter(e.target.value)}>
+                    <option value="all">Todos</option>
+                    <option value="paid">Pagos</option>
+                    <option value="pending">Pendentes</option>
+                    <option value="expired">Expirados</option>
+                  </select>
                 </div>
               </div>
-              <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 blur-[100px] rounded-full -mr-48 -mt-48"></div>
+              <table className="w-full text-left">
+                <thead className="bg-zinc-50 border-b border-zinc-100">
+                  <tr>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Campanha</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Organizador</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Valor</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Data</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Status</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50">
+                  {(paymentsFilter === 'all' ? campaignPayments : campaignPayments.filter(p => p.status === paymentsFilter)).map((p: any) => (
+                    <tr key={p.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="px-8 py-5 font-bold text-zinc-900 text-sm">{p.campaigns?.title || 'Campanha'}</td>
+                      <td className="px-8 py-5 text-sm text-zinc-500">{p.profiles?.name || p.profiles?.email || '-'}</td>
+                      <td className="px-8 py-5 text-sm font-bold text-zinc-900">R$ {(p.amount || 0).toFixed(2)}</td>
+                      <td className="px-8 py-5 text-sm text-zinc-400">{new Date(p.created_at).toLocaleDateString()}</td>
+                      <td className="px-8 py-5">
+                        <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${p.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : p.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                          {p.status === 'paid' ? 'Pago' : p.status === 'pending' ? 'Pendente' : 'Expirado'}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5">
+                        {p.status === 'pending' && (
+                          <button onClick={async () => {
+                            if (!confirm('Confirmar pagamento desta campanha?')) return;
+                            await supabase.from('campaign_payments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', p.id);
+                            await supabase.from('campaigns').update({ status: 'active', payment_status: 'paid' }).eq('id', p.campaign_id);
+                            setCampaignPayments(prev => prev.map(pp => pp.id === p.id ? { ...pp, status: 'paid' } : pp));
+                            alert('Pagamento confirmado e campanha ativada!');
+                          }} className="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest">Aprovar</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {campaignPayments.length === 0 && (
+                    <tr><td colSpan={6} className="px-8 py-12 text-center text-zinc-400 text-sm">Clique em "Atualizar" para buscar pagamentos. Se a tabela campaign_payments não existir, crie-a no Supabase.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         );
@@ -3605,7 +3693,8 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                 {[
                   { id: 'general', label: 'Geral', icon: LayoutDashboard },
                   { id: 'taxes', label: 'Taxas', icon: Ticket },
-                  { id: 'email', label: 'E-mail', icon: Mail }
+                  { id: 'email', label: 'E-mail', icon: Mail },
+                  { id: 'mercadopago', label: 'Mercado Pago', icon: CreditCard }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -3623,58 +3712,185 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
             </header>
 
             <form onSubmit={handleUpdateSettings} className="space-y-8">
-              {settingsSubTab === 'general' && (
-                <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
-                  <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
-                    <LayoutDashboard className="w-5 h-5 text-emerald-600" /> Landing Page
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nome do Site</label>
-                        <input
-                          type="text"
-                          className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={localSettings.site_name || ''}
-                          onChange={e => setLocalSettings({ ...localSettings, site_name: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Descrição SEO</label>
-                        <textarea
-                          className="w-full h-32 rounded-2xl border border-zinc-200 p-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-                          value={localSettings.site_description || ''}
-                          onChange={e => setLocalSettings({ ...localSettings, site_description: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-6">
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Cor Primária</label>
-                        <div className="flex gap-4 items-center">
-                          <input
-                            type="color"
-                            className="w-14 h-14 rounded-2xl border border-zinc-200 p-1 outline-none cursor-pointer"
-                            value={localSettings.primary_color || '#059669'}
-                            onChange={e => setLocalSettings({ ...localSettings, primary_color: e.target.value })}
-                          />
-                          <span className="text-sm font-mono font-bold text-zinc-500 uppercase">{localSettings.primary_color}</span>
+              {settingsSubTab === 'general' && (() => {
+                const howItWorks = parseJson('landing_how_it_works');
+                const features = parseJson('landing_features');
+                const faqItems = parseJson('landing_faq');
+                return (
+                  <div className="space-y-8">
+                    {/* Informações Gerais + Logo */}
+                    <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
+                      <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
+                        <LayoutDashboard className="w-5 h-5 text-emerald-600" /> Informações Gerais
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nome do Site</label>
+                          <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.site_name || ''} onChange={e => setLocalSettings({ ...localSettings, site_name: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Logo do Site</label>
+                          <div className="flex items-center gap-4">
+                            {localSettings.site_logo_url ? (
+                              <img src={localSettings.site_logo_url} alt="Logo" className="h-14 max-w-[200px] object-contain rounded-xl border border-zinc-100 p-2" />
+                            ) : (
+                              <div className="w-14 h-14 bg-zinc-100 rounded-2xl flex items-center justify-center"><ImageIcon className="w-6 h-6 text-zinc-300" /></div>
+                            )}
+                            <input type="file" id="logo-upload-admin" className="hidden" accept="image/*" onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const fileName = `logo-${Date.now()}.${file.name.split('.').pop()}`;
+                                const { error: upErr } = await supabase.storage.from('logos').upload(fileName, file);
+                                if (upErr) throw upErr;
+                                const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(fileName);
+                                setLocalSettings({ ...localSettings, site_logo_url: publicUrl });
+                              } catch (err: any) { alert('Erro ao carregar logo: ' + err.message); }
+                            }} />
+                            <button type="button" onClick={() => document.getElementById('logo-upload-admin')?.click()} className="px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
+                              <Upload className="w-4 h-4" /> Enviar Logo
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Descrição do Site</label>
+                          <textarea className="w-full h-24 rounded-2xl border border-zinc-200 p-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 resize-none" value={localSettings.site_description || ''} onChange={e => setLocalSettings({ ...localSettings, site_description: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">WhatsApp de Suporte</label>
+                          <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.support_whatsapp || ''} onChange={e => setLocalSettings({ ...localSettings, support_whatsapp: e.target.value })} placeholder="55119999999999" />
                         </div>
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">WhatsApp de Suporte (Administrador)</label>
-                        <input
-                          type="text"
-                          className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={localSettings.support_whatsapp || ''}
-                          onChange={e => setLocalSettings({ ...localSettings, support_whatsapp: e.target.value })}
-                          placeholder="Ex: 5511999999999"
-                        />
+                        <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4">Cores do Sistema</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {[
+                            { key: 'primary_color', label: 'Cor Primária', def: '#059669' },
+                            { key: 'secondary_color', label: 'Cor Secundária', def: '#f97316' },
+                            { key: 'button_color', label: 'Cor dos Botões', def: '#059669' }
+                          ].map(c => (
+                            <div key={c.key}>
+                              <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">{c.label}</label>
+                              <div className="flex gap-3 items-center">
+                                <input type="color" className="w-14 h-14 rounded-2xl border border-zinc-200 p-1 outline-none cursor-pointer" value={localSettings[c.key] || c.def} onChange={e => setLocalSettings({ ...localSettings, [c.key]: e.target.value })} />
+                                <span className="text-sm font-mono font-bold text-zinc-500 uppercase">{localSettings[c.key] || c.def}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Como Funciona */}
+                    <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Hash className="w-5 h-5 text-emerald-600" /> Como Funciona</h3>
+                        {howItWorks.length < 3 && (
+                          <button type="button" onClick={() => updateJson('landing_how_it_works', [...howItWorks, { title: '', text: '' }])} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><Plus className="w-4 h-4" /> Adicionar Passo</button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {howItWorks.map((step: any, i: number) => (
+                          <div key={i} className="border border-zinc-100 rounded-2xl p-6 space-y-4 relative">
+                            <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-black text-lg">{i + 1}</div>
+                            <input type="text" placeholder="Título do passo" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-bold outline-none focus:ring-2 focus:ring-emerald-500" value={step.title || ''} onChange={e => { const items = [...howItWorks]; items[i] = { ...items[i], title: e.target.value }; updateJson('landing_how_it_works', items); }} />
+                            <textarea placeholder="Descrição" className="w-full h-20 rounded-xl border border-zinc-200 p-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm" value={step.text || ''} onChange={e => { const items = [...howItWorks]; items[i] = { ...items[i], text: e.target.value }; updateJson('landing_how_it_works', items); }} />
+                            <button type="button" onClick={() => updateJson('landing_how_it_works', howItWorks.filter((_: any, j: number) => j !== i))} className="absolute top-4 right-4 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        ))}
+                        {howItWorks.length === 0 && <p className="text-zinc-400 text-sm col-span-full text-center py-6">Adicione até 3 passos para exibir na Landing Page.</p>}
+                      </div>
+                    </div>
+
+                    {/* Funcionalidades */}
+                    <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Star className="w-5 h-5 text-emerald-600" /> Funcionalidades</h3>
+                        {features.length < 5 && (
+                          <button type="button" onClick={() => updateJson('landing_features', [...features, { icon: 'Star', title: '' }])} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><Plus className="w-4 h-4" /> Adicionar</button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        {features.map((feat: any, i: number) => (
+                          <div key={i} className="border border-zinc-100 rounded-2xl p-5 space-y-3 relative text-center">
+                            <select className="w-full h-10 rounded-xl border border-zinc-200 px-3 font-medium outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-white" value={feat.icon || 'Star'} onChange={e => { const items = [...features]; items[i] = { ...items[i], icon: e.target.value }; updateJson('landing_features', items); }}>
+                              {ICON_OPTIONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                            </select>
+                            <div className="flex justify-center text-emerald-600">{renderIconByName(feat.icon)}</div>
+                            <input type="text" placeholder="Título" className="w-full h-10 rounded-xl border border-zinc-200 px-3 font-bold outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-center" value={feat.title || ''} onChange={e => { const items = [...features]; items[i] = { ...items[i], title: e.target.value }; updateJson('landing_features', items); }} />
+                            <button type="button" onClick={() => updateJson('landing_features', features.filter((_: any, j: number) => j !== i))} className="absolute top-2 right-2 text-red-400 hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
+                          </div>
+                        ))}
+                        {features.length === 0 && <p className="text-zinc-400 text-sm col-span-full text-center py-6">Adicione até 5 funcionalidades para exibir na Landing Page.</p>}
+                      </div>
+                    </div>
+
+                    {/* CTA */}
+                    <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                      <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Rocket className="w-5 h-5 text-emerald-600" /> Chamada para Ação (CTA)</h3>
+                      <textarea className="w-full h-24 rounded-2xl border border-zinc-200 p-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 resize-none" value={localSettings.landing_cta_text || 'Aqui você cria a sua campanha e recebe a arrecadação diretamente em sua conta!'} onChange={e => setLocalSettings({ ...localSettings, landing_cta_text: e.target.value })} placeholder="Texto do CTA na Landing Page" />
+                    </div>
+
+                    {/* FAQ */}
+                    <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><HelpCircle className="w-5 h-5 text-emerald-600" /> Dúvidas Frequentes (FAQ)</h3>
+                        <button type="button" onClick={() => updateJson('landing_faq', [...faqItems, { question: '', answer: '' }])} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><Plus className="w-4 h-4" /> Nova Pergunta</button>
+                      </div>
+                      <div className="space-y-4">
+                        {faqItems.map((faq: any, i: number) => (
+                          <div key={i} className="border border-zinc-100 rounded-2xl p-6 space-y-3 relative">
+                            <input type="text" placeholder="Pergunta" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-bold outline-none focus:ring-2 focus:ring-emerald-500" value={faq.question || ''} onChange={e => { const items = [...faqItems]; items[i] = { ...items[i], question: e.target.value }; updateJson('landing_faq', items); }} />
+                            <textarea placeholder="Resposta" className="w-full h-20 rounded-xl border border-zinc-200 p-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm" value={faq.answer || ''} onChange={e => { const items = [...faqItems]; items[i] = { ...items[i], answer: e.target.value }; updateJson('landing_faq', items); }} />
+                            <button type="button" onClick={() => updateJson('landing_faq', faqItems.filter((_: any, j: number) => j !== i))} className="absolute top-4 right-4 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        ))}
+                        {faqItems.length === 0 && <p className="text-zinc-400 text-center py-6 font-medium">Nenhuma pergunta cadastrada.</p>}
+                      </div>
+                    </div>
+
+                    {/* SEO & Analytics */}
+                    <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                      <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Globe className="w-5 h-5 text-emerald-600" /> SEO & Analytics</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Título SEO (Title Tag)</label>
+                          <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_title || ''} onChange={e => setLocalSettings({ ...localSettings, seo_title: e.target.value })} placeholder="Ex: VaiRifar - Rifas Online" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">URL Canônica</label>
+                          <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_canonical_url || ''} onChange={e => setLocalSettings({ ...localSettings, seo_canonical_url: e.target.value })} placeholder="https://www.vairifar.com.br" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Meta Description</label>
+                          <textarea className="w-full h-24 rounded-2xl border border-zinc-200 p-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 resize-none" value={localSettings.seo_description || ''} onChange={e => setLocalSettings({ ...localSettings, seo_description: e.target.value })} placeholder="Descrição para o Google (até 160 caracteres)" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Palavras-chave</label>
+                          <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_keywords || ''} onChange={e => setLocalSettings({ ...localSettings, seo_keywords: e.target.value })} placeholder="rifa, sorteio, online, prêmios" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Google Analytics ID</label>
+                          <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.google_analytics_id || ''} onChange={e => setLocalSettings({ ...localSettings, google_analytics_id: e.target.value })} placeholder="G-XXXXXXXXXX" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Imagem OG (Open Graph)</label>
+                          <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_og_image || ''} onChange={e => setLocalSettings({ ...localSettings, seo_og_image: e.target.value })} placeholder="URL da imagem para redes sociais" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Robots (Indexação)</label>
+                          <select className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white" value={localSettings.seo_robots || 'index, follow'} onChange={e => setLocalSettings({ ...localSettings, seo_robots: e.target.value })}>
+                            <option value="index, follow">index, follow (Recomendado)</option>
+                            <option value="noindex, follow">noindex, follow</option>
+                            <option value="index, nofollow">index, nofollow</option>
+                            <option value="noindex, nofollow">noindex, nofollow</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
 
               {settingsSubTab === 'taxes' && (
@@ -3698,66 +3914,19 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                 <div className="space-y-8">
                   <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
-                        <Mail className="w-5 h-5 text-emerald-600" /> Configuração SMTP
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => alert('E-mail de teste enviado para ' + user.email)}
-                        className="bg-emerald-50 text-emerald-600 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all"
-                      >
-                        Enviar Teste
-                      </button>
+                      <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Mail className="w-5 h-5 text-emerald-600" /> Configuração SMTP</h3>
+                      <button type="button" onClick={() => alert('E-mail de teste enviado para ' + user.email)} className="bg-emerald-50 text-emerald-600 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all">Enviar Teste</button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Host</label>
-                        <input
-                          type="text"
-                          placeholder="smtp.exemplo.com"
-                          className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={localSettings.smtp_host || ''}
-                          onChange={e => setLocalSettings({ ...localSettings, smtp_host: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Port</label>
-                        <input
-                          type="number"
-                          placeholder="587"
-                          className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={localSettings.smtp_port || ''}
-                          onChange={e => setLocalSettings({ ...localSettings, smtp_port: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP User</label>
-                        <input
-                          type="text"
-                          placeholder="contato@exemplo.com"
-                          className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={localSettings.smtp_user || ''}
-                          onChange={e => setLocalSettings({ ...localSettings, smtp_user: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Password</label>
-                        <input
-                          type="password"
-                          placeholder="********"
-                          className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={localSettings.smtp_pass || ''}
-                          onChange={e => setLocalSettings({ ...localSettings, smtp_pass: e.target.value })}
-                        />
-                      </div>
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Host</label><input type="text" placeholder="smtp.exemplo.com" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_host || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_host: e.target.value })} /></div>
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Port</label><input type="number" placeholder="587" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_port || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_port: e.target.value })} /></div>
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP User</label><input type="text" placeholder="contato@exemplo.com" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_user || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_user: e.target.value })} /></div>
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">SMTP Password</label><input type="password" placeholder="********" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.smtp_pass || ''} onChange={e => setLocalSettings({ ...localSettings, smtp_pass: e.target.value })} /></div>
                     </div>
                   </div>
 
                   <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
-                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
-                      <ImageIcon className="w-5 h-5 text-emerald-600" /> Templates de E-mail (HTML)
-                    </h3>
-
+                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><ImageIcon className="w-5 h-5 text-emerald-600" /> Templates de E-mail</h3>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                       <div className="space-y-4">
                         {[
@@ -3765,49 +3934,41 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                           { id: 'order_pending', label: 'Novo Pedido' },
                           { id: 'user_created', label: 'Boas-vindas' }
                         ].map(t => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => setSelectedTemplate(t.id)}
-                            className={`w-full p-4 rounded-2xl text-left border transition-all ${selectedTemplate === t.id
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm'
-                              : 'bg-white border-zinc-100 text-zinc-400 hover:border-zinc-200'
-                              }`}
-                          >
+                          <button key={t.id} type="button" onClick={() => setSelectedTemplate(t.id)} className={`w-full p-4 rounded-2xl text-left border transition-all ${selectedTemplate === t.id ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm' : 'bg-white border-zinc-100 text-zinc-400 hover:border-zinc-200'}`}>
                             <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60">Evento</p>
                             <p className="font-bold text-sm">{t.label}</p>
                           </button>
                         ))}
                       </div>
-
                       <div className="md:col-span-3 space-y-6">
+                        <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Assunto do E-mail</label><input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings[`email_subject_${selectedTemplate}`] || ''} onChange={e => setLocalSettings({ ...localSettings, [`email_subject_${selectedTemplate}`]: e.target.value })} placeholder="Assunto..." /></div>
                         <div>
-                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Assunto do E-mail</label>
-                          <input
-                            type="text"
-                            className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-                            value={localSettings[`email_subject_${selectedTemplate}`] || ''}
-                            onChange={e => setLocalSettings({ ...localSettings, [`email_subject_${selectedTemplate}`]: e.target.value })}
-                            placeholder="Assunto..."
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Conteúdo HTML</label>
-                          <textarea
-                            className="w-full h-[400px] rounded-2xl border border-zinc-200 p-6 font-mono text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-                            value={localSettings[`email_body_${selectedTemplate}`] || ''}
-                            onChange={e => setLocalSettings({ ...localSettings, [`email_body_${selectedTemplate}`]: e.target.value })}
-                            placeholder="<html>...</html>"
-                          />
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Conteúdo HTML</label>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase">Variáveis disponíveis ↓</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {['{{customer_name}}', '{{campaign_title}}', '{{order_id}}', '{{ticket_numbers}}', '{{total_amount}}', '{{payment_method}}', '{{site_name}}', '{{support_whatsapp}}'].map(v => (
+                              <button key={v} type="button" onClick={() => {
+                                const key = `email_body_${selectedTemplate}`;
+                                setLocalSettings({ ...localSettings, [key]: (localSettings[key] || '') + v });
+                              }} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-[11px] font-mono font-bold hover:bg-emerald-50 hover:text-emerald-700 transition-all">{v}</button>
+                            ))}
+                          </div>
+                          <textarea className="w-full h-[350px] rounded-2xl border border-zinc-200 p-6 font-mono text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-none" value={localSettings[`email_body_${selectedTemplate}`] || ''} onChange={e => setLocalSettings({ ...localSettings, [`email_body_${selectedTemplate}`]: e.target.value })} placeholder="<html>...</html>" />
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
-                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
-                      <Clock className="w-5 h-5 text-emerald-600" /> Logs de Envio
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Clock className="w-5 h-5 text-emerald-600" /> Logs de Envio</h3>
+                      <button type="button" onClick={async () => {
+                        const { data } = await supabase.from('email_logs').select('*').order('sent_at', { ascending: false }).limit(50);
+                        if (data) setEmailLogs(data);
+                      }} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><RefreshCcw className="w-3 h-3" /> Atualizar</button>
+                    </div>
                     <div className="overflow-hidden border border-zinc-100 rounded-2xl">
                       <table className="w-full text-left bg-zinc-50/50">
                         <thead>
@@ -3819,18 +3980,77 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
-                          {[1, 2, 3].map(i => (
-                            <tr key={i} className="bg-white hover:bg-zinc-50 transition-colors">
-                              <td className="px-6 py-4 text-sm font-bold text-zinc-600">cliente{i}@email.com</td>
-                              <td className="px-6 py-4 text-sm text-zinc-500">Seu pedido foi aprovado!</td>
-                              <td className="px-6 py-4 text-sm text-zinc-400">{new Date().toLocaleDateString()}</td>
+                          {emailLogs.length > 0 ? emailLogs.map((log: any, i: number) => (
+                            <tr key={log.id || i} className="bg-white hover:bg-zinc-50 transition-colors">
+                              <td className="px-6 py-4 text-sm font-bold text-zinc-600">{log.recipient}</td>
+                              <td className="px-6 py-4 text-sm text-zinc-500">{log.subject}</td>
+                              <td className="px-6 py-4 text-sm text-zinc-400">{new Date(log.sent_at).toLocaleString()}</td>
                               <td className="px-6 py-4 text-right">
-                                <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md text-[10px] font-bold uppercase tracking-widest">Enviado</span>
+                                <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest ${log.status === 'sent' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{log.status === 'sent' ? 'Enviado' : 'Erro'}</span>
                               </td>
                             </tr>
-                          ))}
+                          )) : (
+                            <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-400 text-sm">Nenhum log encontrado. Clique em "Atualizar" para buscar ou crie a tabela email_logs no Supabase.</td></tr>
+                          )}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {settingsSubTab === 'mercadopago' && (
+                <div className="space-y-8">
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
+                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><CreditCard className="w-5 h-5 text-emerald-600" /> Credenciais Mercado Pago</h3>
+                    <p className="text-sm text-zinc-500 font-medium">Configure as credenciais do Mercado Pago para receber os pagamentos de ativação de campanhas. O valor cobrado segue a tabela de taxas configurada na aba "Taxas".</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Access Token (Produção)</label><input type="password" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.mp_access_token || ''} onChange={e => setLocalSettings({ ...localSettings, mp_access_token: e.target.value })} placeholder="APP_USR-..." /></div>
+                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Public Key</label><input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.mp_public_key || ''} onChange={e => setLocalSettings({ ...localSettings, mp_public_key: e.target.value })} placeholder="APP_USR-..." /></div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden">
+                    <div className="relative z-10 space-y-6">
+                      <div>
+                        <h3 className="text-2xl font-black mb-2">Fluxo de Ativação de Campanhas</h3>
+                        <p className="text-zinc-400 font-medium max-w-xl">Quando um organizador cria uma campanha, ela fica pendente de pagamento. A taxa é calculada automaticamente pela tabela de taxas. Após o pagamento ser confirmado, a campanha é ativada. Se em 72h o pagamento não for realizado, a campanha é excluída automaticamente.</p>
+                      </div>
+                      <div className="flex gap-4 flex-wrap">
+                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Status API</p>
+                          <p className="font-bold flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${localSettings.mp_access_token ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                            {localSettings.mp_access_token ? 'Configurado' : 'Não configurado'}
+                          </p>
+                        </div>
+                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Cobrança</p>
+                          <p className="font-bold">Ativação de Campanha</p>
+                        </div>
+                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Expiração</p>
+                          <p className="font-bold">72 horas</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 blur-[100px] rounded-full -mr-48 -mt-48"></div>
+                  </div>
+
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-4">
+                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><HelpCircle className="w-5 h-5 text-emerald-600" /> Como funciona a cobrança</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {[
+                        { n: '1', t: 'Organizador cria campanha', d: 'A campanha é criada com status "Pendente de Pagamento".' },
+                        { n: '2', t: 'Pagamento da taxa', d: 'O organizador paga a taxa definida na tabela de taxas via Mercado Pago.' },
+                        { n: '3', t: 'Campanha ativada', d: 'Após confirmação, a campanha é publicada. Sem pagamento em 72h, é excluída.' }
+                      ].map(s => (
+                        <div key={s.n} className="border border-zinc-100 rounded-2xl p-6 space-y-3">
+                          <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-black text-lg">{s.n}</div>
+                          <h4 className="font-bold text-zinc-900">{s.t}</h4>
+                          <p className="text-sm text-zinc-500">{s.d}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -5646,15 +5866,44 @@ export default function App() {
   useEffect(() => {
     if (settings.primary_color) {
       document.documentElement.style.setProperty('--brand-orange', settings.primary_color);
-      // Generate slightly darker hover version if needed, or just use the same
-      // For now, let's just set the main variable
+      document.documentElement.style.setProperty('--color-primary', settings.primary_color);
+    }
+    if (settings.secondary_color) {
+      document.documentElement.style.setProperty('--color-secondary', settings.secondary_color);
+    }
+    if (settings.button_color) {
+      document.documentElement.style.setProperty('--color-button', settings.button_color);
     }
     if (settings.site_theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [settings.primary_color, settings.site_theme]);
+    // SEO
+    if (settings.seo_title) document.title = settings.seo_title;
+    const setMeta = (name: string, content: string) => {
+      if (!content) return;
+      let el = document.querySelector(`meta[name="${name}"]`) || document.querySelector(`meta[property="${name}"]`);
+      if (!el) { el = document.createElement('meta'); name.startsWith('og:') ? el.setAttribute('property', name) : el.setAttribute('name', name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    setMeta('description', settings.seo_description || settings.site_description || '');
+    setMeta('keywords', settings.seo_keywords || '');
+    setMeta('robots', settings.seo_robots || 'index, follow');
+    setMeta('og:title', settings.seo_title || settings.site_name || '');
+    setMeta('og:description', settings.seo_description || '');
+    setMeta('og:image', settings.seo_og_image || '');
+    if (settings.seo_canonical_url) {
+      let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+      if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); }
+      link.href = settings.seo_canonical_url;
+    }
+    if (settings.google_analytics_id && !(window as any).__gaLoaded) {
+      const script = document.createElement('script'); script.src = `https://www.googletagmanager.com/gtag/js?id=${settings.google_analytics_id}`; script.async = true; document.head.appendChild(script);
+      const script2 = document.createElement('script'); script2.textContent = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${settings.google_analytics_id}');`; document.head.appendChild(script2);
+      (window as any).__gaLoaded = true;
+    }
+  }, [settings]);
 
   const handleLogin = (u: User) => {
     setUser(u);
@@ -5682,7 +5931,7 @@ export default function App() {
         <AnimatePresence mode="wait">
           {page === 'home' && (
             <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <HomePage campaigns={campaigns} onSelectCampaign={handleSelectCampaign} />
+              <HomePage campaigns={campaigns} onSelectCampaign={handleSelectCampaign} settings={settings} />
             </motion.div>
           )}
 
