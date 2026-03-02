@@ -3914,18 +3914,18 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                       <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Mail className="w-5 h-5 text-emerald-600" /> Configuração SMTP</h3>
                       <button type="button" onClick={async () => {
                         try {
-                          alert('Iniciando teste de conexão SMTP (simulação de frontend)...');
+                          alert('Iniciando teste de conexão SMTP (Enviando ao servidor)...');
                           // Insere um log de envio de teste no Supabase real
                           const testEmail = {
                             recipient: user?.email || 'admin@vairifar.com.br',
                             subject: 'E-mail de Teste do Sistema',
                             template: '<p>Este é um e-mail de teste disparado pelo painel administrativo da RifaPro. As configurações de servidor SMTP estão sendo registradas pelo sistema.</p>',
-                            status: 'sent'
+                            status: 'pending' // agora nasce como pendente pois a Function mudará p/ 'sent'
                           };
                           const { error } = await supabase.from('email_logs').insert([testEmail]);
                           if (error) throw error;
 
-                          alert(`Sucesso! Um e-mail de teste foi registrado com sucesso para ${testEmail.recipient}. Verifique os logs abaixo.`);
+                          alert(`Requisição enviada ao servidor! Verifique sua caixa de entrada em alguns segundos (E-mail: ${testEmail.recipient}).`);
                           // Atualiza a tabela de logs em tempo real
                           const { data } = await supabase.from('email_logs').select('*').order('sent_at', { ascending: false }).limit(20);
                           if (data) setEmailLogs(data);
