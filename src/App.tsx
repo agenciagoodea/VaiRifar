@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket,
@@ -3430,35 +3430,25 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
   const fetchData = async () => {
     if (!user?.id) return;
     try {
-      const { count: totalCampaigns } = await supabase
-        .from('campaigns')
-        .select('*', { count: 'exact', head: true });
+      console.time('SuperAdmin-Init');
+      const [campaignsResult, organizersResult, paidOrdersResult, usersResult] = await Promise.all([
+        supabase.from('campaigns').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'organizer'),
+        supabase.from('orders').select('total_amount').eq('status', 'paid'),
+        supabase.from('profiles').select('*').neq('role', 'super_admin').order('created_at', { ascending: false })
+      ]);
 
-      const { count: totalOrganizers } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'organizer');
-
-      const { data: paidOrders } = await supabase
-        .from('orders')
-        .select('total_amount')
-        .eq('status', 'paid');
-
-      const totalRevenue = paidOrders?.reduce((acc, o) => acc + (o.total_amount || 0), 0) || 0;
+      const totalRevenue = paidOrdersResult.data?.reduce((acc, o) => acc + (o.total_amount || 0), 0) || 0;
 
       setStats({
-        total_campaigns: totalCampaigns || 0,
-        total_organizers: totalOrganizers || 0,
+        total_campaigns: campaignsResult.count || 0,
+        total_organizers: organizersResult.count || 0,
         total_revenue: totalRevenue,
-        tickets_sold: paidOrders?.length || 0
+        tickets_sold: paidOrdersResult.data?.length || 0
       });
 
-      const { data: usersData } = await supabase
-        .from('profiles')
-        .select('*')
-        .neq('role', 'super_admin')
-        .order('created_at', { ascending: false });
-      if (usersData) setUsers(usersData);
+      if (usersResult.data) setUsers(usersResult.data);
+      console.timeEnd('SuperAdmin-Init');
     } catch (err) {
       console.error('Erro ao buscar dados do super admin:', err);
     }
@@ -4326,7 +4316,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const fetchData = async () => {
     if (!user?.id) return;
     try {
-      // Buscar campanhas do organizador
+      // 1. Buscar campanhas do organizador
       const { data: campaignsData, error: campError } = await supabase
         .from('campaigns')
         .select('*')
@@ -4334,70 +4324,69 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
         .order('created_at', { ascending: false });
 
       if (campError) throw campError;
-
-      if (campaignsData && campaignsData.length > 0) {
-        // Buscar contagem real de tickets pagos para todas as campanhas
-        const campIds = campaignsData.map((c: any) => c.id);
-        const { data: paidOrdersData } = await supabase
-          .from('orders')
-          .select('campaign_id, reserved_numbers, ticket_count')
-          .eq('status', 'paid')
-          .in('campaign_id', campIds);
-
-        const countsMap = (paidOrdersData || []).reduce((acc: any, o: any) => {
-          const count = o.reserved_numbers?.length || o.ticket_count || 0;
-          acc[o.campaign_id] = (acc[o.campaign_id] || 0) + count;
-          return acc;
-        }, {});
-
-        const updatedCampaigns = campaignsData.map(c => ({
-          ...c,
-          sold_count: countsMap[c.id] || 0
-        }));
-        setCampaigns(updatedCampaigns as Campaign[]);
-      } else {
+      if (!campaignsData || campaignsData.length === 0) {
         setCampaigns([]);
+        setStats({ total_campaigns: 0, total_revenue: 0, tickets_sold: 0, pending_revenue: 0, pending_count: 0, unfulfilled_revenue: 0, unfulfilled_count: 0 });
+        setOrders([]);
+        return;
       }
 
-      // Calcular stats
-      if (campaignsData && campaignsData.length > 0) {
-        const campIds = campaignsData.map((c: any) => c.id);
-        const { data: allOrders } = await supabase
-          .from('orders')
-          .select('*')
-          .in('campaign_id', campIds)
-          .order('created_at', { ascending: false });
+      // 2. Buscar TODOS os pedidos de uma só vez para estas campanhas
+      const campIds = campaignsData.map((c: any) => c.id);
+      const { data: allOrders, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .in('campaign_id', campIds)
+        .order('created_at', { ascending: false });
 
-        if (allOrders) setOrders(allOrders);
+      if (ordersError) throw ordersError;
+      
+      const ordersList = allOrders || [];
+      setOrders(ordersList);
 
-        const paidOrders = allOrders?.filter(o => o.status === 'paid') || [];
-        const pendingOrders = allOrders?.filter(o => o.status === 'pending' || o.status === 'waiting' || o.status === 'pending_approval') || [];
-        const unfulfilledOrders = allOrders?.filter(o => o.status === 'cancelled' || o.status === 'expired') || [];
+      // 3. Processar sold_count e estatísticas a partir da lista única de pedidos
+      const countsMap: Record<number, number> = {};
+      let totalRevenue = 0;
+      let totalPaidOrders = 0;
+      let pendingRevenue = 0;
+      let pendingCount = 0;
+      let unfulfilledRevenue = 0;
+      let unfulfilledCount = 0;
 
-        const totalRevenue = paidOrders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
-        const pendingRevenue = pendingOrders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
-        const unfulfilledRevenue = unfulfilledOrders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
+      ordersList.forEach(o => {
+        const count = o.reserved_numbers?.length || o.ticket_count || 0;
+        
+        if (o.status === 'paid') {
+          countsMap[o.campaign_id] = (countsMap[o.campaign_id] || 0) + count;
+          totalRevenue += (o.total_amount || 0);
+          totalPaidOrders += 1;
+        } else if (o.status === 'pending' || o.status === 'waiting' || o.status === 'pending_approval') {
+          pendingRevenue += (o.total_amount || 0);
+          pendingCount += 1;
+        } else if (o.status === 'cancelled' || o.status === 'expired') {
+          unfulfilledRevenue += (o.total_amount || 0);
+          unfulfilledCount += 1;
+        }
+      });
 
-        setStats({
-          total_campaigns: campaignsData.length,
-          total_revenue: totalRevenue,
-          tickets_sold: paidOrders.length,
-          pending_revenue: pendingRevenue,
-          pending_count: pendingOrders.length,
-          unfulfilled_revenue: unfulfilledRevenue,
-          unfulfilled_count: unfulfilledOrders.length
-        });
-      } else {
-        setStats({
-          total_campaigns: 0,
-          total_revenue: 0,
-          tickets_sold: 0,
-          pending_revenue: 0,
-          pending_count: 0,
-          unfulfilled_revenue: 0,
-          unfulfilled_count: 0
-        });
-      }
+      // Atualizar campanhas com sold_count
+      const updatedCampaigns = campaignsData.map(c => ({
+        ...c,
+        sold_count: countsMap[c.id] || 0
+      }));
+      setCampaigns(updatedCampaigns as Campaign[]);
+
+      // Atualizar stats
+      setStats({
+        total_campaigns: campaignsData.length,
+        total_revenue: totalRevenue,
+        tickets_sold: totalPaidOrders,
+        pending_revenue: pendingRevenue,
+        pending_count: pendingCount,
+        unfulfilled_revenue: unfulfilledRevenue,
+        unfulfilled_count: unfulfilledCount
+      });
+
     } catch (err) {
       console.error('Erro ao buscar dados do dashboard:', err);
     }
@@ -5691,29 +5680,25 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
         });
         if (error) throw error;
         if (data.user) {
-          // Aguardar um instante para o trigger criar o profile
-          await new Promise(r => setTimeout(r, 800));
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
           onLogin({
             id: data.user.id,
-            name: profile?.name || name,
+            name: name,
             email: data.user.email || email,
-            role: profile?.role || 'organizer'
+            role: 'organizer'
           });
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.user) {
+          // Buscar perfil em paralelo com o redirecionamento se possível, 
+          // mas aqui esperamos para garantir que temos o role correto.
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', data.user.id)
             .single();
+          
           onLogin({
             id: data.user.id,
             name: profile?.name || data.user.email?.split('@')[0] || 'Usuário',
@@ -5832,39 +5817,47 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Restaurar sessão ativa do Supabase
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        if (profile) {
-          setUser({
-            id: session.user.id,
-            name: profile.name,
-            email: session.user.email || '',
-            role: profile.role
-          });
-          setPage('dashboard');
-        }
+    // 1. Tentar restaurar do cache local imediatamente para "perceived performance"
+    const cachedUser = localStorage.getItem('rifapro-user');
+    if (cachedUser) {
+      try {
+        const parsedUser = JSON.parse(cachedUser);
+        setUser(parsedUser);
+        // Se estiver na home e tiver cache, podemos decidir se mandamos pro dashboard
+        // ou esperamos a validação da sessão. Por segurança, apenas marcamos como carregado.
+      } catch (e) {
+        localStorage.removeItem('rifapro-user');
       }
-    });
+    }
 
-    // Carregar campanhas públicas (ativas e encerradas para mostrar ganhadores)
-    supabase
-      .from('campaigns')
-      .select('*')
-      .in('status', ['active', 'finished'])
-      .order('created_at', { ascending: false })
-      .then(async ({ data }) => {
-        if (data && data.length > 0) {
+    const init = async () => {
+      console.time('App-Init');
+      try {
+        // Buscar tudo em paralelo
+        const [sessionResult, settingsResult, campaignsResult] = await Promise.all([
+          supabase.auth.getSession(),
+          supabase.from('settings').select('*'),
+          supabase.from('campaigns').select('*').in('status', ['active', 'finished']).order('created_at', { ascending: false })
+        ]);
+
+        // Processar Settings
+        if (settingsResult.data) {
+          const settingsMap = settingsResult.data.reduce((acc: any, s: any) => {
+            acc[s.key] = s.value;
+            return acc;
+          }, {});
+          setSettings(settingsMap);
+        }
+
+        // Processar Campanhas
+        if (campaignsResult.data) {
+          const camps = campaignsResult.data;
+          // Buscar quantidades vendidas em paralelo
           const { data: paidOrdersData } = await supabase
             .from('orders')
             .select('campaign_id, reserved_numbers, ticket_count')
             .eq('status', 'paid')
-            .in('campaign_id', data.map(c => c.id));
+            .in('campaign_id', camps.map(c => c.id));
 
           const countsMap = (paidOrdersData || []).reduce((acc: any, o: any) => {
             const count = o.reserved_numbers?.length || o.ticket_count || 0;
@@ -5872,17 +5865,51 @@ export default function App() {
             return acc;
           }, {});
 
-          const updatedCampaigns = data.map(c => ({
+          const updatedCampaigns = camps.map(c => ({
             ...c,
             sold_count: countsMap[c.id] || 0
           }));
           setCampaigns(updatedCampaigns as Campaign[]);
-        } else if (data) {
-          setCampaigns(data as Campaign[]);
         }
-      });
 
-    fetchSettings();
+        // Processar Sessão
+        const session = sessionResult.data.session;
+        if (session?.user) {
+          // Buscar perfil apenas se não tivermos ou se houver mudança
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profile) {
+            const userData = {
+              id: session.user.id,
+              name: profile.name,
+              email: session.user.email || '',
+              role: profile.role,
+              phone: profile.phone || ''
+            };
+            setUser(userData);
+            localStorage.setItem('rifapro-user', JSON.stringify(userData));
+            
+            // Se o usuário carregar na home mas tiver sessão, manda pro dashboard
+            if (window.location.pathname === '/' || page === 'home' || page === 'login') {
+               setPage('dashboard');
+            }
+          }
+        } else {
+          setUser(null);
+          localStorage.removeItem('rifapro-user');
+        }
+      } catch (err) {
+        console.error('Erro na inicialização:', err);
+      } finally {
+        console.timeEnd('App-Init');
+      }
+    };
+
+    init();
   }, []);
 
   useEffect(() => {
@@ -5929,12 +5956,14 @@ export default function App() {
 
   const handleLogin = (u: User) => {
     setUser(u);
+    localStorage.setItem('rifapro-user', JSON.stringify(u));
     setPage('dashboard');
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    localStorage.removeItem('rifapro-user');
     setPage('home');
   };
 
