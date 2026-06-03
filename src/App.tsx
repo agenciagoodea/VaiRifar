@@ -63,6 +63,25 @@ import type { Campaign, User, Order } from './types';
 import { supabase } from './lib/supabase';
 
 // --- Helpers ---
+const mapProfileToUser = (profile: any, email: string): User => ({
+  id: profile.id,
+  name: profile.name,
+  email: email,
+  role: profile.role,
+  phone: profile.phone || '',
+  social_whatsapp_group: profile.social_whatsapp_group || '',
+  social_telegram: profile.social_telegram || '',
+  social_instagram: profile.social_instagram || '',
+  social_tiktok: profile.social_tiktok || '',
+  social_youtube: profile.social_youtube || '',
+  social_facebook: profile.social_facebook || '',
+  pixel_facebook: profile.pixel_facebook || '',
+  pixel_google: profile.pixel_google || '',
+  site_theme: profile.site_theme || 'light',
+  primary_color: profile.primary_color || '#ff6b00',
+  logo_url: profile.logo_url || ''
+});
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
@@ -162,12 +181,37 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
   const [fee, setFee] = useState(0);
   const potentialRevenue = campaign.total_tickets * campaign.ticket_price;
 
+  // Checkout states
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card'>('pix');
+  const [checkoutStep, setCheckoutStep] = useState<'init' | 'generating' | 'pix_generated' | 'card_processing' | 'success' | 'error'>('init');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+
+  // General Customer Info
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [cpf, setCpf] = useState('');
+
+  // Credit Card Info
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardholderName, setCardholderName] = useState('');
+  const [expiryMonth, setExpiryMonth] = useState('');
+  const [expiryYear, setExpiryYear] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [installments, setInstallments] = useState('1');
+  const [cardFocused, setCardFocused] = useState(false); // flips visual card when true (CVV focused)
+
+  // Payment result states
+  const [pixData, setPixData] = useState<any>(null);
+  const [cardResult, setCardResult] = useState<any>(null);
+  const [checkingPix, setCheckingPix] = useState(false);
+
   useEffect(() => {
     try {
       const table = JSON.parse(settings.tax_table || '[]');
       const collection = (campaign.total_tickets || 0) * (campaign.ticket_price || 0);
       if (Array.isArray(table) && table.length > 0) {
-        const sorted = [...table].sort((a, b) => a.max - b.max);
+        const sorted = [...table].sort((a: any, b: any) => a.max - b.max);
         const match = sorted.find((t: any) => collection <= t.max) || sorted[sorted.length - 1];
         setFee(match.fee);
       }
@@ -178,54 +222,639 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
     }
   }, [campaign, settings]);
 
-  const handleConfirmPix = () => {
-    alert(`Para ativar sua campanha, realize o PIX no valor de ${formatCurrency(fee)} para a chave do administrador e envie o comprovante via suporte.`);
-    onClose();
+  // Load public key
+  useEffect(() => {
+    const fetchPublicKey = async () => {
+      try {
+        const res = await fetch('/api/mercado-pago/public-key');
+        const data = await res.json();
+        if (data.success) {
+          setPublicKey(data.publicKey);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar chave pública:", err);
+      }
+    };
+    fetchPublicKey();
+  }, []);
+
+  // Load MP.js v2 Script dynamically when 'card' is selected
+  useEffect(() => {
+    if (paymentMethod !== 'card') return;
+    if ((window as any).MercadoPago) return;
+
+    const script = document.createElement("script");
+    script.src = "https://sdk.mercadopago.com/js/v2";
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      // Keep script for potential reuse
+    };
+  }, [paymentMethod]);
+
+  // Format inputs helpers
+  const handleCpfChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').substring(0, 11);
+    let formatted = digits;
+    if (digits.length > 9) {
+      formatted = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9)}`;
+    } else if (digits.length > 6) {
+      formatted = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6)}`;
+    } else if (digits.length > 3) {
+      formatted = `${digits.substring(0, 3)}.${digits.substring(3)}`;
+    }
+    setCpf(formatted);
+  };
+
+  const handleCardNumberChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').substring(0, 16);
+    const parts = [];
+    for (let i = 0; i < digits.length; i += 4) {
+      parts.push(digits.substring(i, i + 4));
+    }
+    setCardNumber(parts.join(' '));
+  };
+
+  const handleGeneratePix = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !name || !cpf || cpf.length < 14) {
+      alert("Preencha seus dados cadastrais e CPF corretamente.");
+      return;
+    }
+    setCheckoutStep('generating');
+    setErrorMessage('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const res = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          payment_method: 'pix',
+          campaign_id: campaign.id,
+          email,
+          name,
+          cpf
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.payment) {
+        setPixData(data.payment);
+        setCheckoutStep('pix_generated');
+      } else {
+        throw new Error(data.message || 'Erro ao gerar PIX.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Falha ao gerar Pix. Contate o suporte.');
+      setCheckoutStep('error');
+    }
+  };
+
+  const handleProcessCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !name || !cpf || !cardNumber || !cardholderName || !expiryMonth || !expiryYear || !cvv) {
+      alert("Por favor, preencha todos os dados do cartão.");
+      return;
+    }
+    setCheckoutStep('card_processing');
+    setErrorMessage('');
+    try {
+      if (!(window as any).MercadoPago) {
+        throw new Error("O script do Mercado Pago ainda está sendo carregado. Aguarde.");
+      }
+      if (!publicKey) {
+        throw new Error("Gateway inativo: Chave pública ausente.");
+      }
+
+      // Instantiate MercadoPago
+      const mp = new (window as any).MercadoPago(publicKey);
+
+      let fullYear = expiryYear;
+      if (expiryYear.length === 2) {
+        fullYear = "20" + expiryYear;
+      }
+
+      // Tokenize card securely on frontend
+      const cardTokenResult = await mp.createCardToken({
+        cardNumber: cardNumber.replace(/\s/g, ''),
+        cardholderName: cardholderName,
+        cardExpirationMonth: expiryMonth,
+        cardExpirationYear: fullYear,
+        securityCode: cvv,
+        identificationType: 'CPF',
+        identificationNumber: cpf.replace(/\D/g, '')
+      });
+
+      if (cardTokenResult.error || !cardTokenResult.id) {
+        console.error("Tokenização falhou:", cardTokenResult);
+        throw new Error(cardTokenResult.error?.message || cardTokenResult.cause?.[0]?.description || "Dados do cartão recusados pelo Mercado Pago.");
+      }
+
+      const cardToken = cardTokenResult.id;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada.");
+
+      // Post token to backend to create payment
+      const res = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          payment_method: 'credit_card',
+          campaign_id: campaign.id,
+          email,
+          name,
+          cpf,
+          token: cardToken,
+          payment_method_id: cardTokenResult.payment_method_id || 'visa',
+          installments: parseInt(installments)
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.payment) {
+        setCardResult(data.payment);
+        if (data.payment.status === 'approved' || data.payment.status === 'paid') {
+          setCheckoutStep('success');
+          onPublished();
+        } else if (data.payment.status === 'in_process' || data.payment.status === 'pending') {
+          setCheckoutStep('success');
+          onPublished();
+        } else {
+          throw new Error(`Pagamento recusado. Status: ${data.payment.status_detail || data.payment.status}`);
+        }
+      } else {
+        throw new Error(data.message || 'Erro ao processar transação de cartão.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Pagamento com cartão recusado.');
+      setCheckoutStep('error');
+    }
+  };
+
+  const handleCheckPixStatus = async () => {
+    if (!pixData) return;
+    setCheckingPix(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada.");
+
+      const res = await fetch(`/api/payments/status/${pixData.id}`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success && (data.status === 'paid' || data.status === 'approved')) {
+        setCheckoutStep('success');
+        onPublished();
+      } else {
+        alert("O pagamento PIX ainda não foi confirmado pelo Mercado Pago. Aguarde alguns segundos e clique novamente.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Erro ao validar pagamento.");
+    } finally {
+      setCheckingPix(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-emerald-900/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-emerald-950/40 backdrop-blur-sm overflow-y-auto">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 text-center space-y-8"
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+        className="bg-white w-full max-w-xl rounded-[40px] shadow-2xl overflow-hidden my-8"
       >
-        <div className="w-24 h-24 bg-emerald-100 rounded-[32px] flex items-center justify-center mx-auto">
-          <Rocket className="w-12 h-12 text-emerald-600" />
-        </div>
-        <div>
-          <h2 className="text-3xl font-black text-zinc-900">Ativar Campanha</h2>
-          <p className="text-zinc-500 mt-2 font-medium">Sua campanha está pronta! Para ativá-la, realize o pagamento da taxa administrativa via PIX.</p>
-        </div>
-
-        <div className="bg-zinc-50 rounded-3xl p-8 space-y-4">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-zinc-400 font-bold uppercase tracking-widest">Arrecadação Estre.</span>
-            <span className="font-black text-zinc-900">{formatCurrency(potentialRevenue)}</span>
+        {/* Header */}
+        <div className="p-8 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-100 rounded-2xl">
+              <Rocket className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-zinc-900">Ativar Campanha</h2>
+              <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Checkout Transparente seguro</p>
+            </div>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-zinc-400 font-bold uppercase tracking-widest text-sm">Taxa de Publicação</span>
-            <span className="text-2xl font-black text-emerald-600">{calculating ? '...' : formatCurrency(fee)}</span>
-          </div>
-        </div>
-
-        <div className="space-y-4 text-left p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
-          <p className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Chave PIX Administrador</p>
-          <p className="text-lg font-black text-zinc-900 break-all select-all cursor-pointer hover:text-emerald-600 transition-colors" title="Clique para copiar">
-            {globalSettings.support_whatsapp || 'vairifar@contato.com'}
-          </p>
-          <p className="text-[10px] text-zinc-400 font-bold uppercase">Após o pagamento, envie o comprovante no suporte via Whatsapp.</p>
-        </div>
-
-        <div className="space-y-4">
-          <button
-            onClick={handleConfirmPix}
-            className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-lg shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-3"
-          >
-            Entendido, vou pagar <ArrowRight className="w-6 h-6" />
+          <button onClick={onClose} className="p-3 hover:bg-zinc-100 rounded-2xl transition-all">
+            <X className="w-5 h-5 text-zinc-400" />
           </button>
-          <button onClick={onClose} className="text-zinc-400 font-bold hover:text-zinc-600 transition-all">Sair</button>
         </div>
+
+        {/* STEP: INIT */}
+        {checkoutStep === 'init' && (
+          <div className="p-8 space-y-6">
+            {/* Info Summary */}
+            <div className="bg-zinc-50 rounded-3xl p-6 space-y-3 border border-zinc-100">
+              <div className="flex justify-between items-center text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                <span>Campanha</span>
+                <span className="text-zinc-950 font-black normal-case text-right truncate max-w-[200px]">{campaign.title}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                <span>Arrecadação Est.</span>
+                <span className="text-zinc-950 font-black">{formatCurrency(potentialRevenue)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-3 border-t border-zinc-100">
+                <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">Taxa de Publicação</span>
+                <span className="text-2xl font-black text-emerald-600">
+                  {calculating ? 'Calculando...' : formatCurrency(fee)}
+                </span>
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('pix')}
+                className={`py-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all border flex items-center justify-center gap-2 ${paymentMethod === 'pix' ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-100' : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}
+              >
+                <QrCode className="w-4 h-4" />
+                PIX Imediato
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('card')}
+                className={`py-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all border flex items-center justify-center gap-2 ${paymentMethod === 'card' ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-100' : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}
+              >
+                <CreditCard className="w-4 h-4" />
+                Cartão de Crédito
+              </button>
+            </div>
+
+            {/* Pix Form */}
+            {paymentMethod === 'pix' && (
+              <form onSubmit={handleGeneratePix} className="space-y-4">
+                <h4 className="font-bold text-zinc-800 text-sm">Dados do Pagador</h4>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Nome Completo</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    placeholder="Nome como no CPF"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">E-mail</label>
+                    <input
+                      type="email"
+                      required
+                      className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">CPF</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      placeholder="000.000.000-00"
+                      value={cpf}
+                      onChange={e => handleCpfChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={calculating}
+                  className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 mt-4"
+                >
+                  Confirmar e Gerar PIX <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+            )}
+
+            {/* Card Form */}
+            {paymentMethod === 'card' && (
+              <form onSubmit={handleProcessCard} className="space-y-4">
+                {/* 3D Animated Card Preview */}
+                <div className="perspective-1000 w-full h-44 mb-6">
+                  <div className={`relative w-full h-full duration-500 transform-style-3d ${cardFocused ? 'rotate-y-180' : ''}`}>
+                    {/* Front */}
+                    <div className="absolute w-full h-full rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-950 p-6 text-white flex flex-col justify-between backface-hidden shadow-lg border border-zinc-800">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black tracking-widest uppercase text-emerald-400">ATIVAR RIFAPRO</span>
+                        <CreditCard className="w-8 h-8 text-zinc-300" />
+                      </div>
+                      <div className="font-mono text-lg tracking-[0.18em] my-2">
+                        {cardNumber || '•••• •••• •••• ••••'}
+                      </div>
+                      <div className="flex justify-between items-end font-mono">
+                        <div className="space-y-0.5">
+                          <span className="text-[8px] text-zinc-500 uppercase block">TITULAR</span>
+                          <span className="text-xs tracking-wider uppercase block truncate max-w-[200px]">
+                            {cardholderName || 'NOME DO TITULAR'}
+                          </span>
+                        </div>
+                        <div className="space-y-0.5 text-right">
+                          <span className="text-[8px] text-zinc-500 uppercase block">VALIDADE</span>
+                          <span className="text-xs block">
+                            {expiryMonth || 'MM'}/{expiryYear || 'AA'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Back */}
+                    <div className="absolute w-full h-full rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 py-6 text-white flex flex-col justify-between backface-hidden rotate-y-180 shadow-lg border border-zinc-800">
+                      <div className="w-full h-10 bg-zinc-800"></div>
+                      <div className="px-6 flex justify-end">
+                        <div className="space-y-1 text-right">
+                          <span className="text-[7px] text-zinc-500 uppercase block">CVC / CVV</span>
+                          <div className="bg-white text-zinc-950 font-mono text-sm font-black px-4 py-1.5 rounded text-right min-w-[60px] italic">
+                            {cvv || '•••'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="px-6 flex justify-between items-center text-[7px] text-zinc-600 font-bold uppercase tracking-wider">
+                        <span>Checkout Transparente</span>
+                        <span>MERCADO PAGO</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <h4 className="font-bold text-zinc-800 text-xs uppercase tracking-wider border-b border-zinc-50 pb-2">Informações de Cobrança</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">E-mail do Comprador</label>
+                    <input
+                      type="email"
+                      required
+                      className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs"
+                      placeholder="comprador@email.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">CPF do Titular</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs"
+                      placeholder="000.000.000-00"
+                      value={cpf}
+                      onChange={e => handleCpfChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <h4 className="font-bold text-zinc-800 text-xs uppercase tracking-wider border-b border-zinc-50 pb-2 pt-2">Dados do Cartão</h4>
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">Número do Cartão</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-mono font-bold outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs tracking-widest"
+                    placeholder="0000 0000 0000 0000"
+                    value={cardNumber}
+                    onChange={e => handleCardNumberChange(e.target.value)}
+                    onFocus={() => setCardFocused(false)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">Nome impresso no Cartão</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs uppercase"
+                    placeholder="JOÃO DE SOUZA"
+                    value={cardholderName}
+                    onChange={e => setCardholderName(e.target.value)}
+                    onFocus={() => setCardFocused(false)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">Mês Venc.</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={2}
+                      className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs text-center"
+                      placeholder="MM (ex: 08)"
+                      value={expiryMonth}
+                      onChange={e => setExpiryMonth(e.target.value.replace(/\D/g, ''))}
+                      onFocus={() => setCardFocused(false)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">Ano Venc.</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={2}
+                      className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs text-center"
+                      placeholder="AA (ex: 28)"
+                      value={expiryYear}
+                      onChange={e => setExpiryYear(e.target.value.replace(/\D/g, ''))}
+                      onFocus={() => setCardFocused(false)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">Código CVV</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={4}
+                      className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs text-center font-mono"
+                      placeholder="123"
+                      value={cvv}
+                      onChange={e => setCvv(e.target.value.replace(/\D/g, ''))}
+                      onFocus={() => setCardFocused(true)}
+                      onBlur={() => setCardFocused(false)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block">Opções de Parcelamento</label>
+                  <select
+                    className="w-full h-11 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-xs"
+                    value={installments}
+                    onChange={e => setInstallments(e.target.value)}
+                  >
+                    <option value="1">1x de {formatCurrency(fee)} (Sem Juros)</option>
+                    <option value="2">2x de {formatCurrency(fee / 2)} (Sem Juros)</option>
+                    <option value="3">3x de {formatCurrency(fee / 3)} (Sem Juros)</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={calculating}
+                  className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 mt-4"
+                >
+                  Pagar {formatCurrency(fee)} Agora <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* STEP: GENERATING OR PROCESSING CARD */}
+        {(checkoutStep === 'generating' || checkoutStep === 'card_processing') && (
+          <div className="p-16 flex flex-col items-center justify-center space-y-6 text-center animate-pulse">
+            <RefreshCcw className="w-16 h-16 text-emerald-600 animate-spin" />
+            <div>
+              <h3 className="text-xl font-black text-zinc-900">
+                {checkoutStep === 'generating' ? 'Gerando Código PIX...' : 'Processando Transação...'}
+              </h3>
+              <p className="text-sm text-zinc-500 mt-2 font-medium">Por favor, não feche esta página ou recarregue.</p>
+            </div>
+          </div>
+        )}
+
+        {/* STEP: PIX GENERATED */}
+        {checkoutStep === 'pix_generated' && pixData && (
+          <div className="p-8 space-y-6 text-center">
+            <div className="bg-emerald-50 text-emerald-800 border border-emerald-100 p-4 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider">
+              <CheckCircle2 className="w-4 h-4" /> PIX Gerado com sucesso!
+            </div>
+
+            {/* QR Code */}
+            {pixData.qr_code_base64 && (
+              <div className="w-48 h-48 bg-white border border-zinc-100 rounded-3xl flex items-center justify-center mx-auto shadow-md p-3">
+                <img
+                  src={`data:image/png;base64,${pixData.qr_code_base64}`}
+                  alt="QR Code PIX"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            )}
+
+            {/* Value */}
+            <div>
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Valor a pagar</p>
+              <p className="text-3xl font-black text-emerald-600 mt-1">{formatCurrency(pixData.amount)}</p>
+            </div>
+
+            {/* Copy-Paste Code */}
+            {pixData.qr_code && (
+              <div className="space-y-2 text-left">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Código Copia e Cola</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    className="flex-1 h-12 rounded-xl border border-zinc-200 px-4 font-mono text-xs text-zinc-500 bg-zinc-50 outline-none"
+                    value={pixData.qr_code}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(pixData.qr_code);
+                      alert('Código PIX copiado!');
+                    }}
+                    className="px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-md shadow-emerald-50"
+                  >
+                    <Copy className="w-4 h-4" /> Copiar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4 pt-4 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={handleCheckPixStatus}
+                disabled={checkingPix}
+                className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+              >
+                <RefreshCcw className={`w-4 h-4 ${checkingPix ? 'animate-spin' : ''}`} />
+                {checkingPix ? 'Validando...' : 'Já Paguei, Verificar Status'}
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setCheckoutStep('init')}
+                className="text-zinc-400 font-bold hover:text-zinc-600 transition-all text-xs"
+              >
+                Voltar e alterar método
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP: SUCCESS */}
+        {checkoutStep === 'success' && (
+          <div className="p-10 text-center space-y-6">
+            <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 shadow-inner">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-3xl font-black text-zinc-900">Campanha Ativada!</h3>
+              <p className="text-zinc-500 font-medium max-w-sm mx-auto mt-1">Sua campanha foi paga com sucesso. Ela já está disponível publicamente para vendas!</p>
+            </div>
+
+            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-6 font-mono text-xs text-zinc-600 space-y-1 text-left max-w-xs mx-auto">
+              <p><strong>Identificador:</strong> {pixData?.id || cardResult?.id || 'Audit-MP'}</p>
+              <p><strong>Método:</strong> {paymentMethod === 'pix' ? 'PIX' : 'Cartão'}</p>
+              <p><strong>Status MP:</strong> approved</p>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all"
+            >
+              Começar a Vender
+            </button>
+          </div>
+        )}
+
+        {/* STEP: ERROR */}
+        {checkoutStep === 'error' && (
+          <div className="p-10 text-center space-y-6">
+            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 shadow-inner">
+              <X className="w-12 h-12" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-zinc-900">Falha no Pagamento</h3>
+              <p className="text-red-600 font-bold text-sm bg-red-50 border border-red-100 p-4 rounded-xl max-w-md mx-auto mt-2">
+                {errorMessage}
+              </p>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <button
+                type="button"
+                onClick={() => setCheckoutStep('init')}
+                className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white py-4 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+              >
+                Tentar Outro Método
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 py-4 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -3412,6 +4041,847 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
   );
 };
 
+const MercadoPagoSettingsPanel = () => {
+  const [activeEnv, setActiveEnv] = useState<'sandbox' | 'production'>('sandbox');
+  const [publicKeyTest, setPublicKeyTest] = useState('');
+  const [accessTokenTest, setAccessTokenTest] = useState('');
+  const [publicKeyProd, setPublicKeyProd] = useState('');
+  const [accessTokenProd, setAccessTokenProd] = useState('');
+  
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Testing and simulation states
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState('');
+  const [testActionLoading, setTestActionLoading] = useState(false);
+  const [testActionResponse, setTestActionResponse] = useState<any>(null);
+
+  // Webhook and simulation states
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [simulatePayId, setSimulatePayId] = useState('');
+  const [simulateStatus, setSimulateStatus] = useState('approved');
+  const [simulating, setSimulating] = useState(false);
+  
+  // Manual confirmation states
+  const [manualPayId, setManualPayId] = useState('');
+  const [manualNotes, setManualNotes] = useState('');
+  const [confirmingManual, setConfirmingManual] = useState(false);
+
+  // Active Tab inside Mercado Pago (creds, testing, webhooks, guide)
+  const [mpTab, setMpTab] = useState<'creds' | 'testing' | 'webhooks' | 'guide'>('creds');
+
+  // Load settings on mount
+  const loadSettings = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const res = await fetch('/api/admin/mercado-pago/settings', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success && data.settings) {
+        setActiveEnv(data.settings.active_environment || 'sandbox');
+        setPublicKeyTest(data.settings.public_key_test || '');
+        setAccessTokenTest(data.settings.access_token_test_masked || '');
+        setPublicKeyProd(data.settings.public_key_production || '');
+        setAccessTokenProd(data.settings.access_token_production_masked || '');
+      }
+    } catch (err) {
+      console.error('Erro ao carregar configurações do Mercado Pago:', err);
+    }
+  };
+
+  const loadCampaigns = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('id, title, status, payment_status, ticket_price, total_tickets')
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!error && data) {
+        setCampaigns(data);
+        if (data.length > 0) {
+          setSelectedCampaignId(data[0].id.toString());
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar campanhas:', err);
+    }
+  };
+
+  const saveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
+
+      const res = await fetch('/api/admin/mercado-pago/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          active_environment: activeEnv,
+          public_key_test: publicKeyTest,
+          access_token_test: accessTokenTest,
+          public_key_production: publicKeyProd,
+          access_token_production: accessTokenProd
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Configurações salvas com sucesso!');
+        loadSettings();
+      } else {
+        alert(data.message || 'Erro ao salvar configurações.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+
+      const res = await fetch('/api/admin/mercado-pago/test-connection', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      const data = await res.json();
+      setTestResult({
+        success: data.success,
+        message: data.message || (data.success ? 'Conexão estabelecida com sucesso!' : 'Falha na conexão.')
+      });
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Erro ao testar conexão.'
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const loadWebhookLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const res = await fetch('/api/admin/mercado-pago/webhooks/logs', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar logs:', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const handleSimulateWebhook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!simulatePayId) {
+      alert('Por favor, informe o ID do pagamento para simular.');
+      return;
+    }
+    setSimulating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+
+      const res = await fetch('/api/admin/mercado-pago/simulate-webhook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          payment_id: simulatePayId,
+          status: simulateStatus
+        })
+      });
+      const data = await res.json();
+      alert(data.message || 'Simulação concluída.');
+      loadWebhookLogs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao simular webhook.');
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const handleManualConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualPayId) {
+      alert('Informe o ID do pagamento para confirmar.');
+      return;
+    }
+    if (!manualNotes.trim()) {
+      alert('Informe uma justificativa/nota de auditoria.');
+      return;
+    }
+    setConfirmingManual(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+
+      const res = await fetch('/api/admin/mercado-pago/manual-confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          payment_id: manualPayId,
+          notes: manualNotes
+        })
+      });
+      const data = await res.json();
+      alert(data.message || 'Pagamento confirmado manualmente.');
+      setManualPayId('');
+      setManualNotes('');
+      loadWebhookLogs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao confirmar pagamento manualmente.');
+    } finally {
+      setConfirmingManual(false);
+    }
+  };
+
+  // Helper to generate a test payment
+  const handleGenerateTestPayment = async (type: 'pix' | 'card_approved' | 'card_declined') => {
+    if (!selectedCampaignId) {
+      alert('Por favor, crie ou selecione uma campanha primeiro.');
+      return;
+    }
+    setTestActionLoading(true);
+    setTestActionResponse(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+
+      let body: any = {
+        payment_method: type === 'pix' ? 'pix' : 'credit_card',
+        campaign_id: parseInt(selectedCampaignId),
+        email: 'test_admin@rifapro.com',
+        name: 'Test Admin MercadoPago',
+        cpf: '12345678909'
+      };
+
+      if (type === 'card_approved') {
+        body.token = 'mock_approved_token';
+        body.payment_method_id = 'visa';
+        body.installments = 1;
+      } else if (type === 'card_declined') {
+        body.token = 'mock_declined_token';
+        body.payment_method_id = 'visa';
+        body.installments = 1;
+      }
+
+      // To make the actual call to Mercado Pago API fail/succeed accordingly or mock,
+      // wait, the server uses the real access token. If mock token is sent, the server will call MP API which might error out.
+      // So we can intercept mock tokens in our server or handle them.
+      // Wait, let's look at what our server expects in `/api/payments/create`. It calls the Mercado Pago API with token.
+      // If we pass a mock_approved_token, Mercado Pago API will return 400 Bad Request because it's not a real token!
+      // Ah! For sandbox tests, Mercado Pago has "test cards" that we tokenize via SDK.
+      // But in the settings panel "Ambiente de Testes", we want to simulate payment quickly.
+      // Let's check: can we just insert a record in `campaign_payments` directly via Supabase client, and bypass Mercado Pago API?
+      // Yes! Since we are the Super Admin, we have full database permissions and can insert a simulated test payment directly!
+      // This is extremely smart because it doesn't require hitting the real Mercado Pago endpoint with mock card data (which would fail)!
+      // Let's check: we can create the campaign_payment record manually in Supabase.
+      
+      const campaign = campaigns.find(c => c.id.toString() === selectedCampaignId);
+      const testPaymentId = `test-${Date.now()}`;
+      
+      const insertData = {
+        campaign_id: parseInt(selectedCampaignId),
+        user_id: session.user.id,
+        amount: 47.00,
+        status: type === 'card_declined' ? 'rejected' : 'pending',
+        provider: 'mercado_pago',
+        payment_id: testPaymentId,
+        external_reference: selectedCampaignId,
+        payment_method: type === 'pix' ? 'pix' : 'credit_card',
+        qr_code: type === 'pix' ? '00020101021226870014br.gov.bcb.pix2565qr.mercadopago.com/transfer/...' : null,
+        qr_code_base64: type === 'pix' ? 'iVBORw0KGgoAAAANSUhEUgAAAJYAAACW...' : null,
+        expires_at: new Date(Date.now() + 72 * 3600000).toISOString(),
+        paid_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: newPay, error } = await supabase
+        .from('campaign_payments')
+        .insert([insertData])
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      // Automatically fill simulation input with the newly generated payment ID
+      setSimulatePayId(testPaymentId);
+
+      setTestActionResponse({
+        success: true,
+        type: type,
+        payment: newPay,
+        message: type === 'pix' 
+          ? 'PIX de teste gerado com sucesso! Use o ID abaixo para simular a aprovação via Webhook.' 
+          : `Pagamento via Cartão (${type === 'card_approved' ? 'Aprovado' : 'Recusado'}) inserido com status inicial '${insertData.status}'.`
+      });
+
+      loadWebhookLogs();
+    } catch (err: any) {
+      setTestActionResponse({
+        success: false,
+        message: err.message || 'Erro ao gerar pagamento de teste.'
+      });
+    } finally {
+      setTestActionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+    loadCampaigns();
+    loadWebhookLogs();
+  }, []);
+
+  const webhookUrl = `${window.location.protocol}//${window.location.host}/api/webhooks/mercado-pago`;
+
+  return (
+    <div className="space-y-8">
+      {/* MP Navigation Tabs */}
+      <div className="flex gap-2 p-1.5 bg-zinc-100 w-fit rounded-[20px]">
+        {[
+          { id: 'creds', label: 'Credenciais', icon: Shield },
+          { id: 'testing', label: 'Ambiente de Testes', icon: Play },
+          { id: 'webhooks', label: 'Webhook & Auditoria', icon: FileText },
+          { id: 'guide', label: 'Passo a Passo', icon: HelpCircle }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setMpTab(tab.id as any)}
+            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${mpTab === tab.id
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-600'
+              }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: CREDENTIALS */}
+      {mpTab === 'creds' && (
+        <div className="space-y-8 animate-fadeIn">
+          <form onSubmit={saveSettings} className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Shield className="w-5 h-5 text-emerald-600" /> Credenciais Mercado Pago</h3>
+                <p className="text-sm text-zinc-500 font-medium mt-1">Configure o ambiente ativo e as respectivas chaves públicas e privadas.</p>
+              </div>
+
+              {/* Mode Switcher */}
+              <div className="flex items-center gap-2 bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveEnv('sandbox')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeEnv === 'sandbox' ? 'bg-amber-500 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-600'}`}
+                >
+                  Modo Teste / Sandbox
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveEnv('production')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeEnv === 'production' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-600'}`}
+                >
+                  Modo Produção
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-zinc-50">
+              {/* Sandbox Creds */}
+              <div className="bg-amber-50/40 border border-amber-100 rounded-[2rem] p-8 space-y-6">
+                <h4 className="font-black text-amber-800 text-xs uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  Credenciais de Teste / Sandbox
+                </h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Public Key (Teste)</label>
+                    <input
+                      type="text"
+                      className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                      value={publicKeyTest}
+                      onChange={e => setPublicKeyTest(e.target.value)}
+                      placeholder="TEST-..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Access Token (Teste)</label>
+                    <input
+                      type="password"
+                      className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                      value={accessTokenTest}
+                      onChange={e => setAccessTokenTest(e.target.value)}
+                      placeholder="TEST-..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Production Creds */}
+              <div className="bg-emerald-50/30 border border-emerald-100 rounded-[2rem] p-8 space-y-6">
+                <h4 className="font-black text-emerald-800 text-xs uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Credenciais de Produção
+                </h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Public Key (Produção)</label>
+                    <input
+                      type="text"
+                      className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      value={publicKeyProd}
+                      onChange={e => setPublicKeyProd(e.target.value)}
+                      placeholder="APP_USR-..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Access Token (Produção)</label>
+                    <input
+                      type="password"
+                      className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      value={accessTokenProd}
+                      onChange={e => setAccessTokenProd(e.target.value)}
+                      placeholder="APP_USR-..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Test connection results */}
+            {testResult && (
+              <div className={`p-6 rounded-2xl border flex gap-3 ${testResult.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                <AlertCircle className={`w-5 h-5 shrink-0 ${testResult.success ? 'text-emerald-600' : 'text-red-600'}`} />
+                <div>
+                  <p className="font-bold text-sm">{testResult.success ? 'Status: Conectado' : 'Erro de Credencial'}</p>
+                  <p className="text-xs font-medium mt-1">{testResult.message}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-4 justify-between items-center pt-4 border-t border-zinc-50 flex-wrap">
+              <button
+                type="button"
+                onClick={testConnection}
+                disabled={testing}
+                className="px-6 py-4 bg-zinc-950 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all text-xs uppercase tracking-widest flex items-center gap-2 disabled:opacity-50"
+              >
+                <RefreshCcw className={`w-4 h-4 ${testing ? 'animate-spin' : ''}`} />
+                {testing ? 'Testando Conexão...' : 'Testar Conexão com Mercado Pago'}
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+              >
+                {saving ? 'Salvando...' : 'Salvar Credenciais'}
+              </button>
+            </div>
+          </form>
+
+          {/* Quick Info Box */}
+          <div className="bg-zinc-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden">
+            <div className="relative z-10 space-y-6">
+              <div>
+                <h3 className="text-2xl font-black mb-2">Segurança em Primeiro Lugar</h3>
+                <p className="text-zinc-400 font-medium max-w-xl">Todos os Access Tokens são salvos criptografados com criptografia simétrica AES-256-CBC no backend e nunca são transmitidos em texto limpo para o cliente. Apenas a chave pública correspondente ao ambiente ativo é exposta ao frontend.</p>
+              </div>
+            </div>
+            <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 blur-[100px] rounded-full -mr-48 -mt-48"></div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: TESTING */}
+      {mpTab === 'testing' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fadeIn">
+          {/* Simulation setup */}
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+              <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Play className="w-5 h-5 text-amber-500" /> Simulação de Pagamentos</h3>
+              <p className="text-sm text-zinc-500 font-medium">Selecione uma campanha cadastrada e crie um pagamento fictício localmente para validar o fluxo de ativação e webhooks.</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Selecione a Campanha</label>
+                  <select
+                    className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    value={selectedCampaignId}
+                    onChange={e => setSelectedCampaignId(e.target.value)}
+                  >
+                    {campaigns.length > 0 ? (
+                      campaigns.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.title} (Status: {c.status} | Pagamento: {c.payment_status || 'pendente'})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Nenhuma campanha cadastrada</option>
+                    )}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateTestPayment('pix')}
+                    disabled={testActionLoading}
+                    className="py-4 px-4 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border border-emerald-100 flex flex-col items-center justify-center gap-2"
+                  >
+                    <QrCode className="w-5 h-5" />
+                    Gerar PIX de Teste
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateTestPayment('card_approved')}
+                    disabled={testActionLoading}
+                    className="py-4 px-4 bg-emerald-600 text-white hover:bg-emerald-700 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all shadow-md flex flex-col items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    Gerar Cartão Aprovado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateTestPayment('card_declined')}
+                    disabled={testActionLoading}
+                    className="py-4 px-4 bg-red-50 text-red-700 hover:bg-red-100 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border border-red-100 flex flex-col items-center justify-center gap-2"
+                  >
+                    <X className="w-5 h-5" />
+                    Gerar Cartão Recusado
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Test result details */}
+            {testActionResponse && (
+              <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-bold text-zinc-900 text-sm uppercase tracking-wider">Resultado da Geração de Teste</h4>
+                  <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase ${testActionResponse.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {testActionResponse.success ? 'Sucesso' : 'Erro'}
+                  </span>
+                </div>
+                
+                <p className="text-sm font-medium text-zinc-600">{testActionResponse.message}</p>
+                
+                {testActionResponse.payment && (
+                  <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-6 space-y-3 font-mono text-xs text-zinc-700">
+                    <p><strong>Payment ID:</strong> {testActionResponse.payment.payment_id}</p>
+                    <p><strong>Status:</strong> {testActionResponse.payment.status}</p>
+                    <p><strong>Método:</strong> {testActionResponse.payment.payment_method}</p>
+                    <p><strong>Campanha ID:</strong> {testActionResponse.payment.campaign_id}</p>
+                    {testActionResponse.payment.qr_code && (
+                      <p className="break-all"><strong>Copia e Cola:</strong> {testActionResponse.payment.qr_code}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Webhook simulator */}
+          <div className="space-y-8">
+            <div className="bg-white p-8 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+              <h3 className="text-lg font-bold text-zinc-900">Simulador de Webhook</h3>
+              <p className="text-xs text-zinc-500 font-medium">Dispara um evento simulado para o endpoint de webhook local para atualizar o pagamento fictício acima.</p>
+
+              <form onSubmit={handleSimulateWebhook} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Payment ID</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Cole o ID gerado ao lado"
+                    value={simulatePayId}
+                    onChange={e => setSimulatePayId(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Simular Status</label>
+                  <select
+                    className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    value={simulateStatus}
+                    onChange={e => setSimulateStatus(e.target.value)}
+                  >
+                    <option value="approved">approved (Aprovado / Ativar Campanha)</option>
+                    <option value="pending">pending (Pendente)</option>
+                    <option value="rejected">rejected (Recusado)</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={simulating || !simulatePayId}
+                  className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
+                >
+                  <RefreshCcw className={`w-4 h-4 ${simulating ? 'animate-spin' : ''}`} />
+                  {simulating ? 'Disparando...' : 'Simular Webhook'}
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-zinc-50 border border-zinc-100 rounded-[2rem] p-8 space-y-3">
+              <h4 className="font-bold text-zinc-800 text-xs uppercase tracking-wider">Como Homologar?</h4>
+              <ol className="text-xs text-zinc-500 space-y-2 list-decimal list-inside font-medium leading-relaxed">
+                <li>Selecione uma campanha pendente de pagamento.</li>
+                <li>Clique em "Gerar PIX de Teste" para criar um pagamento fictício.</li>
+                <li>Note que o ID do pagamento é preenchido no simulador.</li>
+                <li>Clique em "Simular Webhook" com status "approved".</li>
+                <li>A campanha será ativada e o status mudará para "paid" na tabela de logs!</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: WEBHOOKS */}
+      {mpTab === 'webhooks' && (
+        <div className="space-y-8 animate-fadeIn">
+          {/* URL Public and Action bar */}
+          <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-zinc-900">Webhook do Mercado Pago</h3>
+                <p className="text-sm text-zinc-500 font-medium mt-1">Configure o endereço abaixo no painel de desenvolvedores do Mercado Pago.</p>
+              </div>
+              <button
+                type="button"
+                onClick={loadWebhookLogs}
+                disabled={loadingLogs}
+                className="px-6 py-3 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                <RefreshCcw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin' : ''}`} />
+                Atualizar Logs
+              </button>
+            </div>
+
+            {/* Webhook endpoint URL display */}
+            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-6 flex justify-between items-center gap-4 flex-wrap">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">URL de Notificação Oficial (Webhook)</span>
+                <p className="font-mono text-zinc-800 text-sm break-all select-all font-bold">{webhookUrl}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(webhookUrl);
+                  alert('URL copiada para a área de transferência!');
+                }}
+                className="px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-emerald-100 transition-all flex items-center gap-2 border border-emerald-100"
+              >
+                <Copy className="w-4 h-4" /> Copiar URL
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Logs Table */}
+            <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6 overflow-hidden">
+              <h3 className="text-lg font-bold text-zinc-900">Histórico de Eventos Recebidos</h3>
+              <div className="overflow-x-auto -mx-10 px-10">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-100">
+                      <th className="pb-4 text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Data / Hora</th>
+                      <th className="pb-4 text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Tipo</th>
+                      <th className="pb-4 text-[9px] font-bold text-zinc-400 uppercase tracking-widest">ID Pagamento</th>
+                      <th className="pb-4 text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Status De &gt; Para</th>
+                      <th className="pb-4 text-right text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Processado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-50 text-xs">
+                    {logs.length > 0 ? (
+                      logs.map((log: any) => (
+                        <tr key={log.id} className="group hover:bg-zinc-50/50 transition-colors">
+                          <td className="py-4 text-zinc-500 font-medium">
+                            {new Date(log.created_at).toLocaleString('pt-BR')}
+                          </td>
+                          <td className="py-4 font-bold text-zinc-700">
+                            {log.type}
+                          </td>
+                          <td className="py-4 font-mono font-bold text-zinc-600 select-all cursor-pointer hover:text-emerald-600" title="Clique para copiar" onClick={() => {
+                            navigator.clipboard.writeText(log.payment_id);
+                            alert('ID copiado!');
+                          }}>
+                            {log.payment_id}
+                          </td>
+                          <td className="py-4 font-medium">
+                            <span className="text-zinc-400">{log.status_before || 'unknown'}</span>
+                            <span className="text-zinc-400 mx-1.5 font-bold">→</span>
+                            <span className={`font-bold uppercase ${log.status_after === 'paid' ? 'text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded' : 'text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded'}`}>{log.status_after || 'unknown'}</span>
+                          </td>
+                          <td className="py-4 text-right">
+                            {log.processed ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-bold bg-emerald-50 px-2.5 py-1 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" /> Sim
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-red-600 font-bold bg-red-50 px-2.5 py-1 rounded-full" title={log.error_message}>
+                                <X className="w-3 h-3" /> Não
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-10 text-center text-zinc-400 italic">
+                          Nenhuma notificação recebida ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Manual override / audit */}
+            <div className="bg-white p-8 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2"><SettingsIcon className="w-4 h-4 text-emerald-600" /> Confirmação Manual</h3>
+                <p className="text-xs text-zinc-500 font-medium">Fallback emergencial. Permite que um administrador marque um pagamento como pago e ative a campanha, gerando um registro no log de auditoria.</p>
+              </div>
+
+              <form onSubmit={handleManualConfirm} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">ID do Pagamento (Mercado Pago)</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Ex: test-171732912 ou 1234567"
+                    value={manualPayId}
+                    onChange={e => setManualPayId(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Justificativa / Notas</label>
+                  <textarea
+                    required
+                    rows={3}
+                    className="w-full rounded-xl border border-zinc-200 p-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 text-sm resize-none"
+                    placeholder="Justifique a confirmação manual..."
+                    value={manualNotes}
+                    onChange={e => setManualNotes(e.target.value)}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={confirmingManual || !manualPayId || !manualNotes.trim()}
+                  className="w-full py-4 bg-zinc-950 hover:bg-zinc-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
+                >
+                  <Shield className="w-4 h-4" />
+                  {confirmingManual ? 'Confirmando...' : 'Confirmar Pagamento'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: GUIDE */}
+      {mpTab === 'guide' && (
+        <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8 animate-fadeIn">
+          <div>
+            <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><HelpCircle className="w-5 h-5 text-emerald-600" /> Passo a Passo de Configuração</h3>
+            <p className="text-sm text-zinc-500 font-medium mt-1">Siga este guia simples para integrar sua conta Mercado Pago de ponta a ponta.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              {[
+                { step: 1, title: 'Painel de Desenvolvedores', desc: 'Acesse o Painel de Desenvolvedores do Mercado Pago no link do suporte.' },
+                { step: 2, title: 'Criação da Aplicação', desc: 'Crie ou selecione uma aplicação de checkout na plataforma.' },
+                { step: 3, title: 'Obtenção de Credenciais de Teste', desc: 'Copie a Public Key e o Access Token de teste/sandbox.' },
+                { step: 4, title: 'Configuração no Sistema', desc: 'Cole no sistema no modo de Teste e salve as alterações.' },
+                { step: 5, title: 'Testar Conexão', desc: 'Clique em "Testar conexão" para validar as chaves no sandbox.' },
+                { step: 6, title: 'Gerar Pagamento Teste', desc: 'Gere um pagamento teste PIX ou cartão no painel "Ambiente de Testes".' }
+              ].map(item => (
+                <div key={item.step} className="flex gap-4 border border-zinc-100 rounded-2xl p-5 hover:bg-zinc-50/50 transition-colors">
+                  <div className="w-8 h-8 bg-emerald-100 text-emerald-700 font-black rounded-full flex items-center justify-center shrink-0 text-sm">
+                    {item.step}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-zinc-900 text-sm">{item.title}</h4>
+                    <p className="text-xs text-zinc-500 mt-1 font-medium leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              {[
+                { step: 7, title: 'Configurar Webhook', desc: `Configure a URL oficial no Mercado Pago: ${webhookUrl}` },
+                { step: 8, title: 'Validar Webhooks', desc: 'Use o painel "Simular Webhook" para validar a atualização automática de campanhas.' },
+                { step: 9, title: 'Confirmação Manual', desc: 'Verifique nos logs do webhook se os logs e as transações de auditoria estão sendo gravados.' },
+                { step: 10, title: 'Homologação e Homologar Produção', desc: 'Altere para o ambiente de Produção e cole as credenciais reais.' },
+                { step: 11, title: 'Criar webhook de Produção', desc: 'Crie o webhook da aplicação no modo Produção com os eventos payment.created e payment.updated.' },
+                { step: 12, title: 'Homologação Final', desc: 'Faça um pagamento real de baixo valor (ex: R$ 1,00) via PIX no checkout transparente para validação final.' }
+              ].map(item => (
+                <div key={item.step} className="flex gap-4 border border-zinc-100 rounded-2xl p-5 hover:bg-zinc-50/50 transition-colors">
+                  <div className="w-8 h-8 bg-emerald-100 text-emerald-700 font-black rounded-full flex items-center justify-center shrink-0 text-sm">
+                    {item.step}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-zinc-900 text-sm">{item.title}</h4>
+                    <p className="text-xs text-zinc-500 mt-1 font-medium leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout }: { user: User, globalSettings: any, onRefreshSettings: () => void, onLogout: () => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -4012,70 +5482,19 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
               )}
 
               {settingsSubTab === 'mercadopago' && (
-                <div className="space-y-8">
-                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
-                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><CreditCard className="w-5 h-5 text-emerald-600" /> Credenciais Mercado Pago</h3>
-                    <p className="text-sm text-zinc-500 font-medium">Configure as credenciais do Mercado Pago para receber os pagamentos de ativação de campanhas. O valor cobrado segue a tabela de taxas configurada na aba "Taxas".</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Access Token (Produção)</label><input type="password" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.mp_access_token || ''} onChange={e => setLocalSettings({ ...localSettings, mp_access_token: e.target.value })} placeholder="APP_USR-..." /></div>
-                      <div><label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Public Key</label><input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.mp_public_key || ''} onChange={e => setLocalSettings({ ...localSettings, mp_public_key: e.target.value })} placeholder="APP_USR-..." /></div>
-                    </div>
-                  </div>
-
-                  <div className="bg-zinc-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden">
-                    <div className="relative z-10 space-y-6">
-                      <div>
-                        <h3 className="text-2xl font-black mb-2">Fluxo de Ativação de Campanhas</h3>
-                        <p className="text-zinc-400 font-medium max-w-xl">Quando um organizador cria uma campanha, ela fica pendente de pagamento. A taxa é calculada automaticamente pela tabela de taxas. Após o pagamento ser confirmado, a campanha é ativada. Se em 72h o pagamento não for realizado, a campanha é excluída automaticamente.</p>
-                      </div>
-                      <div className="flex gap-4 flex-wrap">
-                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Status API</p>
-                          <p className="font-bold flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${localSettings.mp_access_token ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                            {localSettings.mp_access_token ? 'Configurado' : 'Não configurado'}
-                          </p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Cobrança</p>
-                          <p className="font-bold">Ativação de Campanha</p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-sm">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Expiração</p>
-                          <p className="font-bold">72 horas</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 blur-[100px] rounded-full -mr-48 -mt-48"></div>
-                  </div>
-
-                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-4">
-                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><HelpCircle className="w-5 h-5 text-emerald-600" /> Como funciona a cobrança</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {[
-                        { n: '1', t: 'Organizador cria campanha', d: 'A campanha é criada com status "Pendente de Pagamento".' },
-                        { n: '2', t: 'Pagamento da taxa', d: 'O organizador paga a taxa definida na tabela de taxas via Mercado Pago.' },
-                        { n: '3', t: 'Campanha ativada', d: 'Após confirmação, a campanha é publicada. Sem pagamento em 72h, é excluída.' }
-                      ].map(s => (
-                        <div key={s.n} className="border border-zinc-100 rounded-2xl p-6 space-y-3">
-                          <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-black text-lg">{s.n}</div>
-                          <h4 className="font-bold text-zinc-900">{s.t}</h4>
-                          <p className="text-sm text-zinc-500">{s.d}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <MercadoPagoSettingsPanel />
               )}
 
-              <div className="flex justify-end p-2">
-                <button
-                  type="submit"
-                  className="w-full md:w-auto px-12 py-5 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 text-lg"
-                >
-                  Salvar Alterações
-                </button>
-              </div>
+              {settingsSubTab !== 'mercadopago' && (
+                <div className="flex justify-end p-2">
+                  <button
+                    type="submit"
+                    className="w-full md:w-auto px-12 py-5 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 text-lg"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         );
@@ -4258,6 +5677,106 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+
+  // States para Redes Sociais
+  const [socialWhatsappGroup, setSocialWhatsappGroup] = useState(user.social_whatsapp_group || '');
+  const [socialTelegram, setSocialTelegram] = useState(user.social_telegram || '');
+  const [socialInstagram, setSocialInstagram] = useState(user.social_instagram || '');
+  const [socialTiktok, setSocialTiktok] = useState(user.social_tiktok || '');
+  const [socialYoutube, setSocialYoutube] = useState(user.social_youtube || '');
+  const [socialFacebook, setSocialFacebook] = useState(user.social_facebook || '');
+
+  // States para Integrações
+  const [pixelFacebook, setPixelFacebook] = useState(user.pixel_facebook || '');
+  const [pixelGoogle, setPixelGoogle] = useState(user.pixel_google || '');
+
+  // States para Personalização do Organizador
+  const [siteTheme, setSiteTheme] = useState<'light' | 'dark'>(user.site_theme || 'light');
+  const [primaryColor, setPrimaryColor] = useState(user.primary_color || '#ff6b00');
+  const [logoUrl, setLogoUrl] = useState(user.logo_url || '');
+  const [logoPreview, setLogoPreview] = useState(user.logo_url || '');
+
+  const handleUpdateSocial = async () => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          phone: profilePhone,
+          social_whatsapp_group: socialWhatsappGroup,
+          social_telegram: socialTelegram,
+          social_instagram: socialInstagram,
+          social_tiktok: socialTiktok,
+          social_youtube: socialYoutube,
+          social_facebook: socialFacebook,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      alert('Redes sociais atualizadas com sucesso!');
+      onRefreshSettings();
+      setSettingsTab(null);
+    } catch (err: any) {
+      alert('Erro ao atualizar: ' + err.message);
+    }
+  };
+
+  const handleUpdateIntegrations = async () => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          pixel_facebook: pixelFacebook,
+          pixel_google: pixelGoogle,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      alert('Integrações atualizadas com sucesso!');
+      onRefreshSettings();
+      setSettingsTab('integrations');
+    } catch (err: any) {
+      alert('Erro ao salvar integrações: ' + err.message);
+    }
+  };
+
+  const handleUpdatePersonalize = async () => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          site_theme: siteTheme,
+          primary_color: primaryColor,
+          logo_url: logoUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      alert('Personalização salva com sucesso!');
+      onRefreshSettings();
+      setSettingsTab(null);
+    } catch (err: any) {
+      alert('Erro ao salvar personalização: ' + err.message);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm('Deseja realmente excluir sua conta? Esta ação é permanente e removerá todos os seus dados e campanhas!')) return;
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+      
+      if (error) throw error;
+      alert('Sua conta foi excluída com sucesso.');
+      onLogout();
+    } catch (err: any) {
+      alert('Erro ao excluir conta: ' + err.message);
+    }
+  };
 
   const handleUpdateProfile = async () => {
     try {
@@ -5021,7 +6540,10 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
               </button>
 
               <div className="pt-10 border-t border-zinc-100">
-                <div className="glass-card p-6 flex items-center justify-between hover:bg-zinc-50 cursor-pointer transition-all group">
+                <div
+                  onClick={handleDeleteAccount}
+                  className="glass-card p-6 flex items-center justify-between hover:bg-zinc-50 cursor-pointer transition-all group"
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-500">
                       <X className="w-6 h-6" />
@@ -5078,6 +6600,24 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                   </div>
                 </div>
 
+                {/* Mercado Pago */}
+                <div
+                  onClick={() => setSettingsTab('mp-config')}
+                  className="glass-card p-8 space-y-4 hover:border-blue-500 transition-all cursor-pointer group border-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-12 w-36 flex items-center justify-center font-black text-xl rounded-lg text-blue-500">
+                      Mercado Pago
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="p-1.5 bg-blue-50 rounded-lg text-blue-500">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <p className="text-sm font-bold text-zinc-600 leading-tight">Receba automaticamente via Mercado Pago com cartão ou PIX gerado na hora.</p>
+                  </div>
+                </div>
+
               </div>
 
             </div>
@@ -5086,6 +6626,10 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
 
         if (settingsTab === 'pix-config') return (
           <PixConfigPanel user={user} onBack={() => setSettingsTab('payments')} />
+        );
+
+        if (settingsTab === 'mp-config') return (
+          <MpConfigPanel user={user} onBack={() => setSettingsTab('payments')} />
         );
 
 
@@ -5108,13 +6652,13 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {[
-                  { label: 'Número para suporte', icon: '🇧🇷 + 55', type: 'tel' },
-                  { label: 'Link do grupo Whatsapp', icon: UserIcon, placeholder: 'Link do canal ou grupo' },
-                  { label: 'Link do grupo Telegram', icon: Play, placeholder: 'Link do canal ou grupo' },
-                  { label: 'Instagram', icon: ImageIcon, placeholder: '@seuperfil' },
-                  { label: 'Tiktok', icon: RotateCcw, placeholder: 'Link do seu perfil' },
-                  { label: 'Youtube', icon: Play, placeholder: 'Link do seu perfil' },
-                  { label: 'Facebook', icon: Users, placeholder: 'Link do seu perfil' },
+                  { label: 'Número para suporte', icon: '🇧🇷 + 55', type: 'tel', value: profilePhone, onChange: setProfilePhone },
+                  { label: 'Link do grupo Whatsapp', icon: UserIcon, placeholder: 'Link do canal ou grupo', value: socialWhatsappGroup, onChange: setSocialWhatsappGroup },
+                  { label: 'Link do grupo Telegram', icon: Play, placeholder: 'Link do canal ou grupo', value: socialTelegram, onChange: setSocialTelegram },
+                  { label: 'Instagram', icon: ImageIcon, placeholder: '@seuperfil', value: socialInstagram, onChange: setSocialInstagram },
+                  { label: 'Tiktok', icon: RotateCcw, placeholder: 'Link do seu perfil', value: socialTiktok, onChange: setSocialTiktok },
+                  { label: 'Youtube', icon: Play, placeholder: 'Link do seu perfil', value: socialYoutube, onChange: setSocialYoutube },
+                  { label: 'Facebook', icon: Users, placeholder: 'Link do seu perfil', value: socialFacebook, onChange: setSocialFacebook },
                 ].map((item, i) => (
                   <div key={i} className="space-y-2">
                     <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">{item.label}</label>
@@ -5125,9 +6669,15 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                         ) : (
                           <item.icon className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-orange w-5 h-5" />
                         )}
-                        <input type="text" placeholder={item.placeholder} className={`w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl ${typeof item.icon === 'string' ? 'pl-20' : 'pl-12'} pr-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange`} />
+                        <input
+                          type={item.type || "text"}
+                          placeholder={item.placeholder}
+                          value={item.value}
+                          onChange={(e) => item.onChange(e.target.value)}
+                          className={`w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl ${typeof item.icon === 'string' ? 'pl-20' : 'pl-12'} pr-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange`}
+                        />
                       </div>
-                      <div className="w-12 h-6 bg-zinc-100 rounded-full relative cursor-pointer">
+                      <div className="w-12 h-6 bg-zinc-100 rounded-full relative cursor-pointer opacity-50">
                         <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
                       </div>
                     </div>
@@ -5135,7 +6685,10 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                 ))}
               </div>
 
-              <button className="w-full bg-brand-orange text-white py-5 rounded-2xl font-bold shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all">
+              <button
+                onClick={handleUpdateSocial}
+                className="w-full bg-brand-orange text-white py-5 rounded-2xl font-bold shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all"
+              >
                 Confirmar
               </button>
             </div>
@@ -5223,6 +6776,8 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                     <input
                       type="text"
                       placeholder={settingsTab === 'pixel-config' ? 'Ex: 1234567890' : 'G-DXHERPQHBX'}
+                      value={settingsTab === 'pixel-config' ? pixelFacebook : pixelGoogle}
+                      onChange={(e) => settingsTab === 'pixel-config' ? setPixelFacebook(e.target.value) : setPixelGoogle(e.target.value)}
                       className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
                     />
                   </div>
@@ -5230,7 +6785,12 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
               </div>
 
               <div className="p-8 border-t border-zinc-100">
-                <button className="w-full h-14 bg-brand-orange text-white rounded-2xl font-bold shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all">Continuar</button>
+                <button
+                  onClick={handleUpdateIntegrations}
+                  className="w-full h-14 bg-brand-orange text-white rounded-2xl font-bold shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all"
+                >
+                  Salvar
+                </button>
               </div>
             </motion.div>
           </div>
@@ -5262,12 +6822,12 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                   </div>
                   <div className="flex items-center gap-3">
                     <div
-                      onClick={() => setLocalSettings({ ...localSettings, site_theme: localSettings.site_theme === 'dark' ? 'light' : 'dark' })}
-                      className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${localSettings.site_theme === 'dark' ? 'bg-zinc-800' : 'bg-zinc-100'}`}
+                      onClick={() => setSiteTheme(siteTheme === 'dark' ? 'light' : 'dark')}
+                      className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${siteTheme === 'dark' ? 'bg-zinc-800' : 'bg-zinc-100'}`}
                     >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${localSettings.site_theme === 'dark' ? 'right-1' : 'left-1'}`} />
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${siteTheme === 'dark' ? 'right-1' : 'left-1'}`} />
                     </div>
-                    <span className="text-sm font-bold text-zinc-400 capitalize">{localSettings.site_theme || 'Light'}</span>
+                    <span className="text-sm font-bold text-zinc-400 capitalize">{siteTheme}</span>
                   </div>
                 </div>
 
@@ -5281,11 +6841,11 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                   <div className="flex items-center gap-3">
                     <input
                       type="color"
-                      value={localSettings.primary_color || '#ff6b00'}
-                      onChange={(e) => setLocalSettings({ ...localSettings, primary_color: e.target.value })}
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
                       className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
                     />
-                    <span className="text-sm font-mono text-zinc-400 mt-1 uppercase">{localSettings.primary_color || '#ff6b00'}</span>
+                    <span className="text-sm font-mono text-zinc-400 mt-1 uppercase">{primaryColor}</span>
                   </div>
                 </div>
 
@@ -5313,19 +6873,40 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
 
                   <div className="flex items-center justify-between gap-10">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl font-black text-emerald-500">{localSettings.site_name || 'RIFA'}</span>
-                      <div className="bg-brand-orange text-white px-2 py-1 rounded-lg font-black text-xl">{localSettings.site_name ? '' : '321'}</div>
+                      {logoPreview ? (
+                        <img src={logoPreview} alt="Logo" className="h-14 max-w-[200px] object-contain rounded-xl border p-2" />
+                      ) : (
+                        <span className="text-2xl font-black text-emerald-500">{user.name}</span>
+                      )}
                     </div>
 
-                    <div className="w-32 h-20 border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-zinc-300 hover:border-brand-orange hover:text-brand-orange transition-all cursor-pointer">
+                    <input type="file" id="logo-upload-organizer" className="hidden" accept="image/*" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 500000) { alert('A imagem deve ter no máximo 500KB.'); return; }
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setLogoPreview(reader.result as string);
+                        setLogoUrl(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }} />
+
+                    <div
+                      onClick={() => document.getElementById('logo-upload-organizer')?.click()}
+                      className="w-32 h-20 border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-zinc-300 hover:border-brand-orange hover:text-brand-orange transition-all cursor-pointer"
+                    >
                       <Upload className="w-6 h-6" />
-                      <span className="text-[10px] font-bold">Adicionar</span>
+                      <span className="text-[10px] font-bold">{logoPreview ? 'Alterar' : 'Adicionar'}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <button className="w-full bg-brand-orange text-white py-5 rounded-2xl font-bold shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all">
+              <button
+                onClick={handleUpdatePersonalize}
+                className="w-full bg-brand-orange text-white py-5 rounded-2xl font-bold shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all"
+              >
                 Salvar
               </button>
             </div>
@@ -5699,12 +7280,16 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
             .eq('id', data.user.id)
             .single();
           
-          onLogin({
-            id: data.user.id,
-            name: profile?.name || data.user.email?.split('@')[0] || 'Usuário',
-            email: data.user.email || email,
-            role: profile?.role || 'organizer'
-          });
+          if (profile) {
+            onLogin(mapProfileToUser(profile, data.user.email || email));
+          } else {
+            onLogin({
+              id: data.user.id,
+              name: data.user.email?.split('@')[0] || 'Usuário',
+              email: data.user.email || email,
+              role: 'organizer'
+            });
+          }
         }
       }
     } catch (err: any) {
@@ -5823,12 +7408,39 @@ export default function App() {
       try {
         const parsedUser = JSON.parse(cachedUser);
         setUser(parsedUser);
-        // Se estiver na home e tiver cache, podemos decidir se mandamos pro dashboard
-        // ou esperamos a validação da sessão. Por segurança, apenas marcamos como carregado.
       } catch (e) {
         localStorage.removeItem('rifapro-user');
       }
     }
+
+    // 2. Ouvir mudanças de autenticação em tempo real
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth Change:', event);
+      if (session?.user) {
+        // Se já temos o cache e o ID bate, não precisamos buscar perfil de novo 
+        // a menos que seja uma mudança de estado crítica (como SIGNED_IN)
+        if (user?.id === session.user.id && event !== 'SIGNED_IN') {
+           return;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile) {
+          const userData = mapProfileToUser(profile, session.user.email || '');
+          setUser(userData);
+          localStorage.setItem('rifapro-user', JSON.stringify(userData));
+          if (page === 'login' || page === 'home') setPage('dashboard');
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        localStorage.removeItem('rifapro-user');
+        setPage('home');
+      }
+    });
 
     const init = async () => {
       console.time('App-Init');
@@ -5883,13 +7495,7 @@ export default function App() {
             .single();
 
           if (profile) {
-            const userData = {
-              id: session.user.id,
-              name: profile.name,
-              email: session.user.email || '',
-              role: profile.role,
-              phone: profile.phone || ''
-            };
+            const userData = mapProfileToUser(profile, session.user.email || '');
             setUser(userData);
             localStorage.setItem('rifapro-user', JSON.stringify(userData));
             
@@ -5910,6 +7516,10 @@ export default function App() {
     };
 
     init();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

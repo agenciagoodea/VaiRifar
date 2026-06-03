@@ -5,6 +5,17 @@ export interface User {
   role: 'super_admin' | 'organizer' | 'customer';
   avatar_url?: string;
   phone?: string;
+  social_whatsapp_group?: string;
+  social_telegram?: string;
+  social_instagram?: string;
+  social_tiktok?: string;
+  social_youtube?: string;
+  social_facebook?: string;
+  pixel_facebook?: string;
+  pixel_google?: string;
+  site_theme?: 'light' | 'dark';
+  primary_color?: string;
+  logo_url?: string;
 }
 
 export interface Campaign {

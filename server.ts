@@ -1,24 +1,110 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import { initDb } from "./src/database";
-import db from "./src/database";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- SUPABASE CLIENT CONFIG ---
+const supabaseUrl = 'https://azzgpctfijfzhhmbrbdg.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6emdwY3RmaWpmemhobWJyYmRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5MTcyODgsImV4cCI6MjA4NzQ5MzI4OH0.rDFa9vbK_N8MzCbWxUPY6cMbSo3dx5_LgID-VHZlKHM';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: false
+  },
+  global: {
+    headers: {
+      "x-bypass-rls": "vairifar-secret-key-2026"
+    }
+  }
+});
+
+// --- CRYPTO HELPERS ---
+const ALGORITHM = "aes-256-cbc";
+const ENCRYPTION_KEY = process.env.MP_ENCRYPTION_KEY 
+  ? crypto.createHash('sha256').update(process.env.MP_ENCRYPTION_KEY).digest()
+  : crypto.createHash('sha256').update('vairifar-secret-key-2026').digest();
+
+function encrypt(text: string): string {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return `${iv.toString('hex')}:${encrypted}`;
+}
+
+function decrypt(text: string): string {
+  const parts = text.split(':');
+  const iv = Buffer.from(parts.shift() || '', 'hex');
+  const encryptedText = Buffer.from(parts.join(':'), 'hex');
+  const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+  let decrypted = decipher.update(encryptedText, undefined, 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+// --- MIDDLEWARES ---
+async function validateAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, message: "Token de autorização ausente ou inválido." });
+    }
+    const token = authHeader.split(" ")[1];
+    
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: "Sessão inválida ou expirada." });
+    }
+    
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+      
+    if (profileError || !profile || profile.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Acesso negado. Apenas administradores podem realizar esta ação." });
+    }
+    
+    (req as any).user = user;
+    next();
+  } catch (error: any) {
+    console.error("Erro na validação do admin:", error);
+    res.status(500).json({ success: false, message: "Erro ao validar permissões de administrador." });
+  }
+}
+
+async function validateUser(req: express.Request, res: express.Response, next: express.NextFunction) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, message: "Token de autorização ausente." });
+    }
+    const token = authHeader.split(" ")[1];
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: "Sessão inválida." });
+    }
+    (req as any).user = user;
+    next();
+  } catch (error) {
+    res.status(401).json({ success: false, message: "Erro de autenticação." });
+  }
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  initDb();
-
-  // Log startup info
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-  console.log(`Servidor iniciado. Usuários no banco: ${userCount.count}`);
-  const mockUser = db.prepare('SELECT * FROM users WHERE email = ?').get('admin@rifapro.com');
-  console.log(`Usuário admin@rifapro.com existe? ${!!mockUser}`);
+  console.log("Servidor iniciado. Banco de dados local SQLite desativado, utilizando somente Supabase.");
 
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -29,242 +115,761 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  // Auth (Mock)
-  app.post("/api/auth/login", (req, res) => {
-    const { email, password } = req.body;
-    console.log(`Tentativa de login: ${email}`);
-    
+  // --- MERCADO PAGO INTEGRATION ENDPOINTS ---
+
+  // Get active public key
+  app.get("/api/mercado-pago/public-key", async (req, res) => {
     try {
-      const user = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?').get(email, password);
-      
-      if (user) {
-        console.log(`Login bem-sucedido: ${email}`);
-        res.json({ 
-          success: true, 
-          user: { 
-            id: (user as any).id, 
-            name: (user as any).name, 
-            email: (user as any).email,
-            role: (user as any).role
-          } 
+      const { data: settings, error } = await supabase
+        .from("mercado_pago_settings")
+        .select("active_environment, public_key_test, public_key_production")
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !settings) {
+        return res.json({ success: true, publicKey: null, environment: "sandbox" });
+      }
+
+      const publicKey = settings.active_environment === "production"
+        ? settings.public_key_production
+        : settings.public_key_test;
+
+      res.json({
+        success: true,
+        publicKey,
+        environment: settings.active_environment
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Get admin settings (masked tokens)
+  app.get("/api/admin/mercado-pago/settings", validateAdmin, async (req, res) => {
+    try {
+      const { data: settings, error } = await supabase
+        .from("mercado_pago_settings")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !settings) {
+        return res.json({
+          success: true,
+          settings: {
+            environment: "sandbox",
+            active_environment: "sandbox",
+            public_key_test: "",
+            access_token_test_masked: "",
+            public_key_production: "",
+            access_token_production_masked: ""
+          }
         });
+      }
+
+      const maskToken = (encrypted: string | null) => {
+        if (!encrypted) return "";
+        try {
+          const decrypted = decrypt(encrypted);
+          if (!decrypted) return "";
+          const prefix = decrypted.substring(0, Math.min(8, decrypted.length));
+          const suffix = decrypted.length > 4 ? decrypted.substring(decrypted.length - 4) : "";
+          return `${prefix}************${suffix}`;
+        } catch {
+          return "APP_USR-************ERR";
+        }
+      };
+
+      res.json({
+        success: true,
+        settings: {
+          id: settings.id,
+          environment: settings.environment,
+          active_environment: settings.active_environment,
+          public_key_test: settings.public_key_test || "",
+          access_token_test_masked: settings.access_token_test_encrypted ? maskToken(settings.access_token_test_encrypted) : "",
+          public_key_production: settings.public_key_production || "",
+          access_token_production_masked: settings.access_token_production_encrypted ? maskToken(settings.access_token_production_encrypted) : ""
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Save admin settings
+  app.post("/api/admin/mercado-pago/settings", validateAdmin, async (req, res) => {
+    try {
+      const {
+        active_environment,
+        public_key_test,
+        access_token_test,
+        public_key_production,
+        access_token_production
+      } = req.body;
+
+      const { data: currentSettings } = await supabase
+        .from("mercado_pago_settings")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      let encrypted_test = currentSettings?.access_token_test_encrypted || null;
+      if (access_token_test && !access_token_test.includes("*")) {
+        encrypted_test = encrypt(access_token_test);
+      }
+
+      let encrypted_prod = currentSettings?.access_token_production_encrypted || null;
+      if (access_token_production && !access_token_production.includes("*")) {
+        encrypted_prod = encrypt(access_token_production);
+      }
+
+      const updateData = {
+        environment: active_environment || "sandbox",
+        active_environment: active_environment || "sandbox",
+        public_key_test: public_key_test || "",
+        access_token_test_encrypted: encrypted_test,
+        public_key_production: public_key_production || "",
+        access_token_production_encrypted: encrypted_prod,
+        updated_at: new Date().toISOString()
+      };
+
+      let resultError = null;
+      if (currentSettings) {
+        const { error } = await supabase
+          .from("mercado_pago_settings")
+          .update(updateData)
+          .eq("id", currentSettings.id);
+        resultError = error;
       } else {
-        console.log(`Credenciais inválidas para: ${email}`);
-        res.status(401).json({ success: false, message: "E-mail ou senha incorretos." });
+        const { error } = await supabase
+          .from("mercado_pago_settings")
+          .insert([updateData]);
+        resultError = error;
       }
-    } catch (error) {
-      console.error("Erro no login:", error);
-      res.status(500).json({ success: false, message: "Erro interno no servidor." });
+
+      if (resultError) {
+        return res.status(400).json({ success: false, message: resultError.message });
+      }
+
+      res.json({ success: true, message: "Configurações salvas com sucesso!" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 
-  // Campaigns
-  app.get("/api/campaigns", (req, res) => {
+  // Test admin settings connection
+  app.post("/api/admin/mercado-pago/test-connection", validateAdmin, async (req, res) => {
     try {
-      const { organizer_id } = req.query;
-      let query = `
-        SELECT c.*, 
-        (SELECT COUNT(*) FROM tickets WHERE campaign_id = c.id AND status = 'paid') as sold_count
-        FROM campaigns c
-        WHERE status = 'active'
-      `;
-      const params: any[] = [];
+      const { data: settings, error } = await supabase
+        .from("mercado_pago_settings")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
-      if (organizer_id && organizer_id !== 'undefined') {
-        query += ` AND organizer_id = ?`;
-        params.push(organizer_id);
+      if (error || !settings) {
+        return res.status(400).json({ success: false, message: "Configurações do Mercado Pago não encontradas." });
       }
 
-      query += ` ORDER BY created_at DESC`;
-      
-      const campaigns = db.prepare(query).all(...params);
-      res.json(campaigns);
-    } catch (error: any) {
-      console.error("Erro em GET /api/campaigns:", error);
-      res.status(500).json({ success: false, message: error.message });
-    }
-  });
+      const env = settings.active_environment === "production" ? "production" : "sandbox";
+      const encryptedToken = env === "production" ? settings.access_token_production_encrypted : settings.access_token_test_encrypted;
 
-  app.get("/api/campaigns/:slug", (req, res) => {
-    try {
-      const campaign = db.prepare(`
-        SELECT c.*, 
-        (SELECT COUNT(*) FROM tickets WHERE campaign_id = c.id AND status = 'paid') as sold_count
-        FROM campaigns c
-        WHERE slug = ?
-      `).get(req.params.slug);
-      
-      if (!campaign) return res.status(404).json({ success: false, message: "Campanha não encontrada" });
-      res.json(campaign);
-    } catch (error: any) {
-      console.error("Erro em GET /api/campaigns/:slug:", error);
-      res.status(500).json({ success: false, message: error.message });
-    }
-  });
-
-  app.post("/api/campaigns", (req, res) => {
-    const { organizer_id, title, description, slug, image_url, ticket_price, total_tickets, draw_date, draw_type } = req.body;
-    console.log(`Criando campanha: ${title} para organizador ${organizer_id}`);
-    
-    try {
-      // Verify organizer exists
-      const user = db.prepare('SELECT id FROM users WHERE id = ?').get(organizer_id);
-      if (!user) {
-        return res.status(400).json({ success: false, message: "Organizador não encontrado. Faça login novamente." });
+      if (!encryptedToken) {
+        return res.status(400).json({ success: false, message: `Access Token para o ambiente de ${env} não configurado.` });
       }
 
-      const result = db.prepare(`
-        INSERT INTO campaigns (organizer_id, title, description, slug, image_url, ticket_price, total_tickets, draw_date, draw_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(organizer_id, title, description, slug, image_url, ticket_price, total_tickets, draw_date, draw_type || 'internal');
-      
-      const campaignId = result.lastInsertRowid;
-      console.log(`Campanha criada com ID: ${campaignId}. Gerando bilhetes...`);
+      const accessToken = decrypt(encryptedToken);
 
-      // Pre-generate tickets
-      // Increased limit to 20,000 for better demo experience
-      if (total_tickets <= 20000) {
-        const insertTicket = db.prepare('INSERT INTO tickets (campaign_id, number) VALUES (?, ?)');
-        const insertMany = db.transaction((id, count) => {
-          for (let i = 1; i <= count; i++) insertTicket.run(id, i);
+      const response = await fetch("https://api.mercadopago.com/v1/payment_methods", {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`
+        }
+      });
+
+      if (response.ok) {
+        return res.json({ success: true, message: `Conexão bem-sucedida no ambiente de ${env}!` });
+      } else {
+        const errData = await response.json();
+        return res.status(400).json({ 
+          success: false, 
+          message: `Erro ao conectar com Mercado Pago (${env}): ${errData.message || response.statusText}`,
+          details: errData
         });
-        insertMany(campaignId, total_tickets);
-        console.log(`${total_tickets} bilhetes gerados para campanha ${campaignId}`);
+      }
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Create payment (PIX or Card)
+  app.post("/api/payments/create", validateUser, async (req, res) => {
+    try {
+      const {
+        payment_method,
+        campaign_id,
+        email,
+        name,
+        cpf,
+        token,
+        payment_method_id,
+        installments
+      } = req.body;
+
+      if (!payment_method || !campaign_id || !email || !name || !cpf) {
+        return res.status(400).json({ success: false, message: "Campos obrigatórios ausentes." });
+      }
+
+      const { data: campaign, error: campErr } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("id", campaign_id)
+        .single();
+
+      if (campErr || !campaign) {
+        return res.status(404).json({ success: false, message: "Campanha não encontrada." });
+      }
+
+      // Calculate fee using tax table
+      const { data: globalSettingsData, error: settingsErr } = await supabase
+        .from("settings")
+        .select("*");
+
+      if (settingsErr) {
+        return res.status(500).json({ success: false, message: "Erro ao carregar as configurações globais de taxas." });
+      }
+
+      const settingsMap = (globalSettingsData || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      const taxTable = JSON.parse(settingsMap.tax_table || '[]');
+      const potentialRevenue = (campaign.total_tickets || 0) * (campaign.ticket_price || 0);
+      let fee = 47.00;
+      if (Array.isArray(taxTable) && taxTable.length > 0) {
+        const sorted = [...taxTable].sort((a: any, b: any) => a.max - b.max);
+        const match = sorted.find((t: any) => potentialRevenue <= t.max) || sorted[sorted.length - 1];
+        if (match) {
+          fee = Number(match.fee);
+        }
+      }
+
+      // Get MP settings
+      const { data: mpSettings, error: mpErr } = await supabase
+        .from("mercado_pago_settings")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (mpErr || !mpSettings) {
+        return res.status(400).json({ success: false, message: "Configurações do Mercado Pago não encontradas no sistema." });
+      }
+
+      const isProd = mpSettings.active_environment === "production";
+      const encryptedToken = isProd ? mpSettings.access_token_production_encrypted : mpSettings.access_token_test_encrypted;
+
+      if (!encryptedToken) {
+        return res.status(400).json({ success: false, message: "O gateway Mercado Pago não está configurado." });
+      }
+
+      const accessToken = decrypt(encryptedToken);
+      const nameParts = name.trim().split(" ");
+      const first_name = nameParts[0] || "Payer";
+      const last_name = nameParts.slice(1).join(" ") || "Name";
+
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+      const idempotencyKey = `${Date.now()}-${Math.random()}`;
+
+      const mpBody: any = {
+        transaction_amount: fee,
+        description: `Taxa de Ativação - Campanha: ${campaign.title}`,
+        payer: {
+          email: email,
+          first_name: first_name,
+          last_name: last_name,
+          identification: {
+            type: "CPF",
+            number: cpf.replace(/\D/g, '')
+          }
+        },
+        external_reference: campaign_id.toString(),
+        notification_url: `${appUrl}/api/webhooks/mercado-pago`
+      };
+
+      if (payment_method === "pix") {
+        mpBody.payment_method_id = "pix";
+      } else if (payment_method === "credit_card") {
+        mpBody.token = token;
+        mpBody.payment_method_id = payment_method_id;
+        mpBody.installments = installments || 1;
       } else {
-        console.warn(`Total de bilhetes (${total_tickets}) excede o limite de geração síncrona.`);
+        return res.status(400).json({ success: false, message: "Método de pagamento inválido." });
       }
 
-      res.json({ success: true, id: campaignId });
-    } catch (e: any) {
-      console.error("Erro ao criar campanha:", e);
-      res.status(400).json({ success: false, message: e.message });
+      const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": idempotencyKey
+        },
+        body: JSON.stringify(mpBody)
+      });
+
+      const mpResult = await mpResponse.json();
+
+      if (!mpResponse.ok) {
+        console.error("Erro no Mercado Pago:", mpResult);
+        return res.status(400).json({
+          success: false,
+          message: mpResult.message || "Erro ao gerar pagamento no Mercado Pago.",
+          details: mpResult
+        });
+      }
+
+      const expiry = mpResult.date_of_expiration || new Date(Date.now() + 72 * 3600000).toISOString();
+      const insertData = {
+        campaign_id: campaign_id,
+        user_id: (req as any).user.id,
+        amount: fee,
+        status: mpResult.status || "pending",
+        provider: "mercado_pago",
+        payment_id: mpResult.id.toString(),
+        external_reference: campaign_id.toString(),
+        payment_method: payment_method,
+        qr_code: mpResult.point_of_interaction?.transaction_data?.qr_code || null,
+        qr_code_base64: mpResult.point_of_interaction?.transaction_data?.qr_code_base64 || null,
+        expires_at: expiry,
+        paid_at: mpResult.status === "approved" ? new Date().toISOString() : null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: existingPayment } = await supabase
+        .from("campaign_payments")
+        .select("id")
+        .eq("campaign_id", campaign_id)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let dbPaymentError = null;
+      if (existingPayment) {
+        const { error } = await supabase
+          .from("campaign_payments")
+          .update(insertData)
+          .eq("id", existingPayment.id);
+        dbPaymentError = error;
+      } else {
+        const { error } = await supabase
+          .from("campaign_payments")
+          .insert([insertData]);
+        dbPaymentError = error;
+      }
+
+      if (dbPaymentError) {
+        console.error("Erro ao salvar no banco:", dbPaymentError);
+        return res.status(500).json({ success: false, message: "Erro ao registrar o pagamento localmente." });
+      }
+
+      if (mpResult.status === "approved") {
+        await supabase
+          .from("campaigns")
+          .update({ status: "active", payment_status: "paid" })
+          .eq("id", campaign_id);
+      }
+
+      res.json({
+        success: true,
+        payment: {
+          id: mpResult.id.toString(),
+          status: mpResult.status,
+          status_detail: mpResult.status_detail,
+          qr_code: insertData.qr_code,
+          qr_code_base64: insertData.qr_code_base64,
+          amount: fee,
+          expires_at: expiry,
+          campaign_id: campaign_id
+        }
+      });
+    } catch (err: any) {
+      console.error("Erro em /api/payments/create:", err);
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 
-  // Orders & Tickets
-  app.post("/api/orders", (req, res) => {
-    const { campaign_id, customer_name, customer_email, customer_phone, ticket_count, payment_method } = req.body;
-    
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaign_id);
-    if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+  // Check payment status (used for manual verification and polling)
+  app.get("/api/payments/status/:payment_id", validateUser, async (req, res) => {
+    try {
+      const { payment_id } = req.params;
 
-    const total_amount = campaign.ticket_price * ticket_count;
+      const { data: payment, error: payErr } = await supabase
+        .from("campaign_payments")
+        .select("*")
+        .eq("payment_id", payment_id)
+        .maybeSingle();
 
-    // Transaction to reserve tickets
-    const createOrder = db.transaction(() => {
-      // Find available tickets
-      const availableTickets = db.prepare(`
-        SELECT id FROM tickets 
-        WHERE campaign_id = ? AND status = 'available' 
-        LIMIT ?
-      `).all(campaign_id, ticket_count);
-
-      if (availableTickets.length < ticket_count) {
-        throw new Error("Not enough tickets available");
+      if (payErr || !payment) {
+        return res.status(404).json({ success: false, message: "Pagamento não encontrado." });
       }
 
-      const orderResult = db.prepare(`
-        INSERT INTO orders (campaign_id, customer_name, customer_email, customer_phone, total_amount, payment_method)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(campaign_id, customer_name, customer_email, customer_phone, total_amount, payment_method);
+      const { data: mpSettings } = await supabase
+        .from("mercado_pago_settings")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
-      const orderId = orderResult.lastInsertRowid;
+      if (mpSettings) {
+        const isProd = mpSettings.active_environment === "production";
+        const encryptedToken = isProd ? mpSettings.access_token_production_encrypted : mpSettings.access_token_test_encrypted;
+        if (encryptedToken) {
+          const accessToken = decrypt(encryptedToken);
+          const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${payment_id}`, {
+            headers: { "Authorization": `Bearer ${accessToken}` }
+          });
+          if (mpResponse.ok) {
+            const mpResult = await mpResponse.json();
+            const newStatus = mpResult.status;
 
-      const updateTicket = db.prepare(`
-        UPDATE tickets SET status = 'reserved', order_id = ?, reserved_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-      `);
+            if (newStatus !== payment.status) {
+              const updatedStatus = newStatus === "approved" ? "paid" : newStatus;
+              await supabase
+                .from("campaign_payments")
+                .update({ 
+                  status: updatedStatus, 
+                  paid_at: newStatus === "approved" ? new Date().toISOString() : payment.paid_at,
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", payment.id);
 
-      for (const ticket of availableTickets) {
-        updateTicket.run(orderId, ticket.id);
+              if (newStatus === "approved") {
+                await supabase
+                  .from("campaigns")
+                  .update({ status: "active", payment_status: "paid" })
+                  .eq("id", payment.campaign_id);
+              }
+              payment.status = updatedStatus;
+            }
+          }
+        }
       }
 
-      return orderId;
-    });
+      res.json({
+        success: true,
+        status: payment.status,
+        campaign_id: payment.campaign_id
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Webhook Receiver
+  app.post("/api/webhooks/mercado-pago", async (req, res) => {
+    res.status(200).send("OK");
+
+    const payload = req.body;
+    console.log("Recebido Webhook do Mercado Pago:", JSON.stringify(payload));
 
     try {
-      const orderId = createOrder();
-      res.json({ success: true, orderId });
-    } catch (e: any) {
-      res.status(400).json({ success: false, message: e.message });
-    }
-  });
+      const paymentId = payload.data?.id || payload.id || (payload.resource && payload.resource.split('/').pop());
 
-  // Admin Stats
-  app.get("/api/admin/stats/:organizerId", (req, res) => {
-    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.params.organizerId) as any;
-    
-    if (user?.role === 'super_admin') {
-      const stats = db.prepare(`
-        SELECT 
-          (SELECT COUNT(*) FROM campaigns) as total_campaigns,
-          (SELECT COUNT(*) FROM users WHERE role = 'organizer') as total_organizers,
-          COALESCE(SUM(o.total_amount), 0) as total_revenue,
-          COALESCE((SELECT COUNT(*) FROM tickets WHERE status = 'paid'), 0) as tickets_sold
-        FROM orders o
-        WHERE o.status = 'paid'
-      `).get();
-      return res.json(stats || { total_campaigns: 0, total_organizers: 0, total_revenue: 0, tickets_sold: 0 });
-    }
-
-    const stats = db.prepare(`
-      SELECT 
-        COUNT(DISTINCT c.id) as total_campaigns,
-        COALESCE(SUM(o.total_amount), 0) as total_revenue,
-        COALESCE((SELECT COUNT(*) FROM tickets t JOIN campaigns c2 ON t.campaign_id = c2.id WHERE c2.organizer_id = ? AND t.status = 'paid'), 0) as tickets_sold
-      FROM campaigns c
-      LEFT JOIN orders o ON c.id = o.campaign_id AND o.status = 'paid'
-      WHERE c.organizer_id = ?
-    `).get(req.params.organizerId, req.params.organizerId);
-    res.json(stats || { total_campaigns: 0, total_revenue: 0, tickets_sold: 0 });
-  });
-
-  // Super Admin: Settings
-  app.get("/api/settings", (req, res) => {
-    const settings = db.prepare('SELECT * FROM settings').all();
-    const settingsMap = (settings as any[]).reduce((acc, s) => {
-      acc[s.key] = s.value;
-      return acc;
-    }, {});
-    res.json(settingsMap);
-  });
-
-  app.post("/api/settings", (req, res) => {
-    const updates = req.body;
-    const updateStmt = db.prepare('UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?');
-    
-    const transaction = db.transaction((data) => {
-      for (const [key, value] of Object.entries(data)) {
-        updateStmt.run(value, key);
+      if (!paymentId) {
+        console.log("Webhook sem ID de pagamento.");
+        return;
       }
-    });
 
-    try {
-      transaction(updates);
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(400).json({ success: false, message: e.message });
+      const eventId = payload.id ? payload.id.toString() : `evt-${paymentId}-${Date.now()}`;
+      const { data: existingLog } = await supabase
+        .from("mercado_pago_webhook_logs")
+        .select("id, processed")
+        .eq("event_id", eventId)
+        .maybeSingle();
+
+      if (existingLog && existingLog.processed) {
+        console.log(`Evento ${eventId} já processado anteriormente.`);
+        return;
+      }
+
+      const { data: mpSettings } = await supabase
+        .from("mercado_pago_settings")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (!mpSettings) {
+        throw new Error("Configurações do Mercado Pago não encontradas no webhook.");
+      }
+
+      const isProd = mpSettings.active_environment === "production";
+      const encryptedToken = isProd ? mpSettings.access_token_production_encrypted : mpSettings.access_token_test_encrypted;
+
+      if (!encryptedToken) {
+        throw new Error("Token do Mercado Pago não configurado no webhook.");
+      }
+
+      const accessToken = decrypt(encryptedToken);
+
+      const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`
+        }
+      });
+
+      if (!mpResponse.ok) {
+        throw new Error(`Erro ao consultar pagamento no Mercado Pago API: ${mpResponse.statusText}`);
+      }
+
+      const mpResult = await mpResponse.json();
+      const statusReal = mpResult.status;
+      const campaignId = mpResult.external_reference;
+
+      const { data: localPayment } = await supabase
+        .from("campaign_payments")
+        .select("*")
+        .eq("payment_id", paymentId.toString())
+        .maybeSingle();
+
+      const statusBefore = localPayment ? localPayment.status : "unknown";
+      const statusAfter = statusReal === "approved" ? "paid" : statusReal;
+
+      if (statusReal === "approved") {
+        if (localPayment) {
+          await supabase
+            .from("campaign_payments")
+            .update({
+              status: "paid",
+              paid_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", localPayment.id);
+        }
+
+        if (campaignId) {
+          await supabase
+            .from("campaigns")
+            .update({
+              status: "active",
+              payment_status: "paid"
+            })
+            .eq("id", parseInt(campaignId));
+        }
+      } else if (localPayment && statusAfter !== statusBefore) {
+        await supabase
+          .from("campaign_payments")
+          .update({
+            status: statusAfter,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", localPayment.id);
+      }
+
+      const logData = {
+        event_id: eventId,
+        type: payload.type || payload.action || "payment",
+        payment_id: paymentId.toString(),
+        payload: payload,
+        status_before: statusBefore,
+        status_after: statusAfter,
+        processed: true,
+        created_at: new Date().toISOString()
+      };
+
+      if (existingLog) {
+        await supabase
+          .from("mercado_pago_webhook_logs")
+          .update(logData)
+          .eq("id", existingLog.id);
+      } else {
+        await supabase
+          .from("mercado_pago_webhook_logs")
+          .insert([logData]);
+      }
+
+      console.log(`Webhook processado. Pagamento: ${paymentId}, Status: ${statusReal}`);
+    } catch (webhookErr: any) {
+      console.error("Erro no processamento de webhook:", webhookErr);
+      try {
+        const paymentId = payload.data?.id || payload.id || "unknown";
+        const eventId = payload.id ? payload.id.toString() : `evt-err-${Date.now()}`;
+        await supabase
+          .from("mercado_pago_webhook_logs")
+          .insert([{
+            event_id: eventId,
+            type: payload.type || payload.action || "error",
+            payment_id: paymentId.toString(),
+            payload: payload,
+            processed: false,
+            error_message: webhookErr.message,
+            created_at: new Date().toISOString()
+          }]);
+      } catch (logErr) {
+        console.error("Erro ao registrar log de erro do webhook:", logErr);
+      }
     }
   });
 
-  // Super Admin: User Management
-  app.get("/api/admin/users", (req, res) => {
-    const users = db.prepare('SELECT id, name, email, role, status, created_at FROM users WHERE role != "super_admin"').all();
-    res.json(users);
+  // Get Webhook Logs for Admin
+  app.get("/api/admin/mercado-pago/webhooks/logs", validateAdmin, async (req, res) => {
+    try {
+      const { data: logs, error } = await supabase
+        .from("mercado_pago_webhook_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      res.json({ success: true, logs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
   });
 
-  app.post("/api/admin/users/:id/status", (req, res) => {
-    const { status } = req.body;
+  // Simulate Webhook Event
+  app.post("/api/admin/mercado-pago/simulate-webhook", validateAdmin, async (req, res) => {
     try {
-      db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.params.id);
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(400).json({ success: false, message: e.message });
+      const { payment_id, status } = req.body;
+
+      if (!payment_id || !status) {
+        return res.status(400).json({ success: false, message: "Campos payment_id e status são obrigatórios." });
+      }
+
+      const { data: payment, error: payErr } = await supabase
+        .from("campaign_payments")
+        .select("*")
+        .eq("payment_id", payment_id)
+        .maybeSingle();
+
+      if (payErr || !payment) {
+        return res.status(404).json({ success: false, message: "Pagamento de campanha não encontrado localmente para simulação." });
+      }
+
+      const statusBefore = payment.status;
+      const updatedStatus = status === "approved" ? "paid" : status;
+
+      const { error: updatePayErr } = await supabase
+        .from("campaign_payments")
+        .update({
+          status: updatedStatus,
+          paid_at: status === "approved" ? new Date().toISOString() : payment.paid_at,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", payment.id);
+
+      if (updatePayErr) {
+        return res.status(400).json({ success: false, message: "Erro ao atualizar status do pagamento simulado." });
+      }
+
+      if (status === "approved") {
+        await supabase
+          .from("campaigns")
+          .update({
+            status: "active",
+            payment_status: "paid"
+          })
+          .eq("id", payment.campaign_id);
+      }
+
+      const eventId = `sim-${Date.now()}`;
+      await supabase
+        .from("mercado_pago_webhook_logs")
+        .insert([{
+          event_id: eventId,
+          type: "payment.updated",
+          payment_id: payment_id,
+          payload: { simulation: true, payment_id, status, triggered_by_admin: true },
+          status_before: statusBefore,
+          status_after: updatedStatus,
+          processed: true,
+          created_at: new Date().toISOString()
+        }]);
+
+      res.json({
+        success: true,
+        message: `Webhook simulado com sucesso! Status do pagamento atualizado para: ${updatedStatus}.`
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Fallback Manual Confirm
+  app.post("/api/admin/mercado-pago/manual-confirm", validateAdmin, async (req, res) => {
+    try {
+      const { payment_id, notes } = req.body;
+
+      if (!payment_id) {
+        return res.status(400).json({ success: false, message: "Campo payment_id é obrigatório." });
+      }
+
+      const { data: payment, error: payErr } = await supabase
+        .from("campaign_payments")
+        .select("*")
+        .eq("payment_id", payment_id)
+        .maybeSingle();
+
+      if (payErr || !payment) {
+        return res.status(404).json({ success: false, message: "Pagamento não encontrado." });
+      }
+
+      const statusBefore = payment.status;
+
+      await supabase
+        .from("campaign_payments")
+        .update({
+          status: "paid",
+          paid_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", payment.id);
+
+      await supabase
+        .from("campaigns")
+        .update({
+          status: "active",
+          payment_status: "paid"
+        })
+        .eq("id", payment.campaign_id);
+
+      const eventId = `audit-${Date.now()}`;
+      await supabase
+        .from("mercado_pago_webhook_logs")
+        .insert([{
+          event_id: eventId,
+          type: "manual.audit_confirm",
+          payment_id: payment_id,
+          payload: { 
+            manual_confirmation: true, 
+            notes: notes || "Confirmação manual pelo administrador", 
+            admin_user: (req as any).user.email 
+          },
+          status_before: statusBefore,
+          status_after: "paid",
+          processed: true,
+          created_at: new Date().toISOString()
+        }]);
+
+      res.json({
+        success: true,
+        message: "Pagamento confirmado e campanha ativada com sucesso! Log de auditoria gerado."
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 
   // Catch-all for API routes to prevent HTML fallback
-  app.all("/api/*", (req, res) => {
+  app.use("/api", (req, res) => {
     console.log(`API 404: ${req.method} ${req.url}`);
     res.status(404).json({ 
       success: false, 
