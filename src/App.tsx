@@ -86,23 +86,42 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-const getAccessTokenOrThrow = async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Sessao expirada. Faca login novamente.');
+const getAccessTokenOrThrow = async (refresh = false) => {
+  const { data, error } = refresh
+    ? await supabase.auth.refreshSession()
+    : await supabase.auth.getSession();
+
+  if (error || !data.session) {
+    await supabase.auth.signOut();
+    localStorage.removeItem('rifapro-user');
+    throw new Error('Sessao invalida ou expirada. Faca login novamente.');
+  }
+
+  const { session } = data;
   return session.access_token;
 };
 
 const fetchJsonWithAuth = async (url: string, options: RequestInit = {}) => {
-  const accessToken = await getAccessTokenOrThrow();
-  const headers = new Headers(options.headers);
-  headers.set('Authorization', `Bearer ${accessToken}`);
+  const request = async (refresh = false) => {
+    const accessToken = await getAccessTokenOrThrow(refresh);
+    const headers = new Headers(options.headers);
+    headers.set('Authorization', `Bearer ${accessToken}`);
 
-  if (options.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
+    if (options.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    const response = await fetch(url, { ...options, headers });
+    const data = await response.json().catch(() => ({}));
+
+    return { response, data };
+  };
+
+  let { response, data } = await request(false);
+
+  if (response.status === 401) {
+    ({ response, data } = await request(true));
   }
-
-  const response = await fetch(url, { ...options, headers });
-  const data = await response.json().catch(() => ({}));
 
   if (!response.ok || data.success === false) {
     throw new Error(data.message || `Erro HTTP ${response.status}`);
@@ -1245,15 +1264,28 @@ const Sidebar = ({ activeTab, onNavigate, onLogout, user, globalSettings }: { ac
   ];
 
   const menuItems = user.role === 'super_admin' ? adminItems : organizerItems;
+  const logoUrl = globalSettings?.site_logo_url || globalSettings?.logo_url;
+  const siteName = globalSettings?.site_name || 'Vai Rifar?';
 
   return (
     <div className="w-72 bg-white border-r border-zinc-100 h-screen sticky top-0 flex flex-col p-6">
-      <div className="flex items-center gap-2 mb-10 px-2">
-        <div className="bg-brand-green p-1.5 rounded-lg">
-          <Ticket className="text-white w-5 h-5" />
-        </div>
-        <span className="text-xl font-black tracking-tight text-zinc-900">{globalSettings.site_name || 'RIFA'} <span className="text-brand-orange">{globalSettings.site_name ? '' : '321'}</span></span>
-      </div>
+      <button
+        type="button"
+        onClick={() => onNavigate('home')}
+        className="mb-10 px-2 flex items-center gap-3 text-left transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-xl"
+        aria-label="Ir para a home publica"
+      >
+        {logoUrl ? (
+          <img src={logoUrl} alt={siteName} className="h-14 max-w-[190px] w-auto object-contain" />
+        ) : (
+          <>
+            <div className="bg-brand-green p-1.5 rounded-lg shrink-0">
+              <Ticket className="text-white w-5 h-5" />
+            </div>
+            <span className="text-xl font-black tracking-tight text-zinc-900">{siteName}</span>
+          </>
+        )}
+      </button>
 
       {user.role !== 'super_admin' && (
         <button
@@ -4069,15 +4101,7 @@ const MercadoPagoSettingsPanel = () => {
   // Load settings on mount
   const loadSettings = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const res = await fetch('/api/admin/mercado-pago/settings', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-      const data = await res.json();
+      const data = await fetchJsonWithAuth('/api/admin/mercado-pago/settings');
       if (data.success && data.settings) {
         setActiveEnv(data.settings.active_environment || 'sandbox');
         setPublicKeyTest(data.settings.public_key_test || '');
@@ -4109,19 +4133,12 @@ const MercadoPagoSettingsPanel = () => {
     }
   };
 
-  const saveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveSettings = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     setSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
-
-      const res = await fetch('/api/admin/mercado-pago/settings', {
+      const data = await fetchJsonWithAuth('/api/admin/mercado-pago/settings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
         body: JSON.stringify({
           active_environment: activeEnv,
           public_key_test: publicKeyTest,
@@ -4130,12 +4147,11 @@ const MercadoPagoSettingsPanel = () => {
           access_token_production: accessTokenProd
         })
       });
-      const data = await res.json();
       if (data.success) {
-        alert('Configurações salvas com sucesso!');
+        alert('Configura??es salvas com sucesso!');
         loadSettings();
       } else {
-        alert(data.message || 'Erro ao salvar configurações.');
+        alert(data.message || 'Erro ao salvar configura??es.');
       }
     } catch (err: any) {
       alert(err.message || 'Erro ao salvar.');
@@ -4148,24 +4164,17 @@ const MercadoPagoSettingsPanel = () => {
     setTesting(true);
     setTestResult(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada.');
-
-      const res = await fetch('/api/admin/mercado-pago/test-connection', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
+      const data = await fetchJsonWithAuth('/api/admin/mercado-pago/test-connection', {
+        method: 'POST'
       });
-      const data = await res.json();
       setTestResult({
         success: data.success,
-        message: data.message || (data.success ? 'Conexão estabelecida com sucesso!' : 'Falha na conexão.')
+        message: data.message || (data.success ? 'Conex?o estabelecida com sucesso!' : 'Falha na conex?o.')
       });
     } catch (err: any) {
       setTestResult({
         success: false,
-        message: err.message || 'Erro ao testar conexão.'
+        message: err.message || 'Erro ao testar conex?o.'
       });
     } finally {
       setTesting(false);
@@ -4175,15 +4184,7 @@ const MercadoPagoSettingsPanel = () => {
   const loadWebhookLogs = async () => {
     setLoadingLogs(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const res = await fetch('/api/admin/mercado-pago/webhooks/logs', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-      const data = await res.json();
+      const data = await fetchJsonWithAuth('/api/admin/mercado-pago/webhooks/logs');
       if (data.success) {
         setLogs(data.logs || []);
       }
@@ -4202,22 +4203,14 @@ const MercadoPagoSettingsPanel = () => {
     }
     setSimulating(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada.');
-
-      const res = await fetch('/api/admin/mercado-pago/simulate-webhook', {
+      const data = await fetchJsonWithAuth('/api/admin/mercado-pago/simulate-webhook', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
         body: JSON.stringify({
           payment_id: simulatePayId,
           status: simulateStatus
         })
       });
-      const data = await res.json();
-      alert(data.message || 'Simulação concluída.');
+      alert(data.message || 'Simula??o conclu?da.');
       loadWebhookLogs();
     } catch (err: any) {
       alert(err.message || 'Erro ao simular webhook.');
@@ -4238,21 +4231,13 @@ const MercadoPagoSettingsPanel = () => {
     }
     setConfirmingManual(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada.');
-
-      const res = await fetch('/api/admin/mercado-pago/manual-confirm', {
+      const data = await fetchJsonWithAuth('/api/admin/mercado-pago/manual-confirm', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
         body: JSON.stringify({
           payment_id: manualPayId,
           notes: manualNotes
         })
       });
-      const data = await res.json();
       alert(data.message || 'Pagamento confirmado manualmente.');
       setManualPayId('');
       setManualNotes('');
@@ -5361,26 +5346,24 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                       <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Mail className="w-5 h-5 text-emerald-600" /> Configuração SMTP</h3>
                       <button type="button" onClick={async () => {
                         try {
-                          alert('Iniciando teste de conexão SMTP (Enviando ao servidor)...');
-                          // Insere um log de envio de teste no Supabase real
-                          const testEmail = {
-                            recipient: user?.email || 'admin@vairifar.com.br',
-                            subject: 'E-mail de Teste do Sistema',
-                            template: '<p>Este é um e-mail de teste disparado pelo painel administrativo da RifaPro. As configurações de servidor SMTP estão sendo registradas pelo sistema.</p>',
-                            status: 'pending' // agora nasce como pendente pois a Function mudará p/ 'sent'
-                          };
-                          const { error } = await supabase.from('email_logs').insert([testEmail]);
-                          if (error) throw error;
+                          const recipient = user?.email || 'admin@vairifar.com.br';
+                          const response = await fetchJsonWithAuth('/api/admin/email/test', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              recipient,
+                              subject: 'E-mail de Teste do Sistema',
+                              html: '<p>Este e-mail confirma que o SMTP do Vai Rifar? esta funcionando em producao.</p>'
+                            })
+                          });
 
-                          alert(`Requisição enviada ao servidor! Verifique sua caixa de entrada em alguns segundos (E-mail: ${testEmail.recipient}).`);
-                          // Atualiza a tabela de logs em tempo real
-                          const { data } = await supabase.from('email_logs').select('*').order('sent_at', { ascending: false }).limit(20);
-                          if (data) setEmailLogs(data);
+                          alert(response.message || `E-mail de teste enviado para ${recipient}.`);
+                          const logsResponse = await fetchJsonWithAuth('/api/admin/email/logs');
+                          setEmailLogs(logsResponse.logs || []);
                         } catch (err: any) {
                           alert('Erro ao enviar e-mail de teste: ' + err.message);
                         }
                       }} className="bg-emerald-50 text-emerald-600 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
-                        <Mail className="w-4 h-4" /> Teste de Conexão
+                        <Mail className="w-4 h-4" /> Testar envio de e-mail
                       </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -5434,8 +5417,8 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                     <div className="flex items-center justify-between">
                       <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Clock className="w-5 h-5 text-emerald-600" /> Logs de Envio</h3>
                       <button type="button" onClick={async () => {
-                        const { data } = await supabase.from('email_logs').select('*').order('sent_at', { ascending: false }).limit(50);
-                        if (data) setEmailLogs(data);
+                        const response = await fetchJsonWithAuth('/api/admin/email/logs');
+                        setEmailLogs(response.logs || []);
                       }} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"><RefreshCcw className="w-3 h-3" /> Atualizar</button>
                     </div>
                     <div className="overflow-hidden border border-zinc-100 rounded-2xl">
@@ -7386,16 +7369,6 @@ export default function App() {
 
   useEffect(() => {
     // 1. Tentar restaurar do cache local imediatamente para "perceived performance"
-    const cachedUser = localStorage.getItem('rifapro-user');
-    if (cachedUser) {
-      try {
-        const parsedUser = JSON.parse(cachedUser);
-        setUser(parsedUser);
-      } catch (e) {
-        localStorage.removeItem('rifapro-user');
-      }
-    }
-
     // 2. Ouvir mudanças de autenticação em tempo real
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth Change:', event);

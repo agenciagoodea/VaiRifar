@@ -18,3 +18,25 @@ View your app in AI Studio: https://ai.studio/apps/4d81f86d-8dc7-4edc-ae92-f0b8c
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Deploy automatico na Vercel
+
+O workflow `.github/workflows/deploy-vercel.yml` publica em producao a cada push nas branches `main` ou `master`, e tambem pode ser executado manualmente pelo GitHub Actions.
+
+Configure este secret no repositorio GitHub:
+
+- `VERCEL_TOKEN`
+
+Configure tambem estas variaveis no projeto da Vercel:
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `MP_ENCRYPTION_KEY`
+- `APP_URL`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+- `SMTP_SECURE`
