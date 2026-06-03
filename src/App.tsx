@@ -86,6 +86,31 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
+const getAccessTokenOrThrow = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Sessao expirada. Faca login novamente.');
+  return session.access_token;
+};
+
+const fetchJsonWithAuth = async (url: string, options: RequestInit = {}) => {
+  const accessToken = await getAccessTokenOrThrow();
+  const headers = new Headers(options.headers);
+  headers.set('Authorization', `Bearer ${accessToken}`);
+
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(url, { ...options, headers });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || `Erro HTTP ${response.status}`);
+  }
+
+  return data;
+};
+
 const formatExpiry = (expiryValue: string | number) => {
   const hours = parseFloat(String(expiryValue));
   if (isNaN(hours)) return '24 horas';
@@ -869,54 +894,38 @@ const PixConfigPanel = ({ user, onBack }: { user: User, onBack: () => void }) =>
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from('payment_configs')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setPixType(data.pix_key_type || 'cpf');
-          setPixKey(data.pix_key || '');
-          setPixName(data.pix_holder_name || '');
+    let active = true;
+
+    fetchJsonWithAuth('/api/payment-configs/me')
+      .then(({ config }) => {
+        if (!active) return;
+        if (config) {
+          setPixType(config.pix_key_type || 'cpf');
+          setPixKey(config.pix_key || '');
+          setPixName(config.pix_holder_name || '');
         }
-        setLoaded(true);
+      })
+      .catch((err) => alert(err.message || 'Erro ao carregar configuracao PIX'))
+      .finally(() => {
+        if (active) setLoaded(true);
       });
+
+    return () => {
+      active = false;
+    };
   }, [user.id]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Manual check to handle missing unique constraint on user_id
-      const { data: existing } = await supabase
-        .from('payment_configs')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      const payload = {
-        user_id: user.id,
-        pix_key_type: pixType,
-        pix_key: pixKey,
-        pix_holder_name: pixName,
-        updated_at: new Date().toISOString()
-      };
-
-      let error;
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from('payment_configs')
-          .update(payload)
-          .eq('id', existing.id);
-        error = updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from('payment_configs')
-          .insert(payload);
-        error = insertError;
-      }
-
-      if (error) throw error;
+      await fetchJsonWithAuth('/api/payment-configs/me', {
+        method: 'POST',
+        body: JSON.stringify({
+          pix_key_type: pixType,
+          pix_key: pixKey,
+          pix_holder_name: pixName
+        })
+      });
       alert('Configuração PIX salva com sucesso!');
     } catch (err: any) {
       alert(err.message || 'Erro ao salvar');
@@ -1022,52 +1031,36 @@ const MpConfigPanel = ({ user, onBack }: { user: User, onBack: () => void }) => 
   const [showToken, setShowToken] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from('payment_configs')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setAccessToken(data.mp_access_token || '');
-          setPublicKey(data.mp_public_key || '');
+    let active = true;
+
+    fetchJsonWithAuth('/api/payment-configs/me')
+      .then(({ config }) => {
+        if (!active) return;
+        if (config) {
+          setAccessToken(config.mp_access_token || '');
+          setPublicKey(config.mp_public_key || '');
         }
-        setLoaded(true);
+      })
+      .catch((err) => alert(err.message || 'Erro ao carregar configuracao Mercado Pago'))
+      .finally(() => {
+        if (active) setLoaded(true);
       });
+
+    return () => {
+      active = false;
+    };
   }, [user.id]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Manual check to handle missing unique constraint on user_id
-      const { data: existing } = await supabase
-        .from('payment_configs')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      const payload = {
-        user_id: user.id,
-        mp_access_token: accessToken,
-        mp_public_key: publicKey,
-        updated_at: new Date().toISOString()
-      };
-
-      let error;
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from('payment_configs')
-          .update(payload)
-          .eq('id', existing.id);
-        error = updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from('payment_configs')
-          .insert(payload);
-        error = insertError;
-      }
-
-      if (error) throw error;
+      await fetchJsonWithAuth('/api/payment-configs/me', {
+        method: 'POST',
+        body: JSON.stringify({
+          mp_access_token: accessToken,
+          mp_public_key: publicKey
+        })
+      });
       alert('Configuração Mercado Pago salva com sucesso!');
     } catch (err: any) {
       alert(err.message || 'Erro ao salvar');
@@ -4400,7 +4393,7 @@ const MercadoPagoSettingsPanel = () => {
       {/* Tab: CREDENTIALS */}
       {mpTab === 'creds' && (
         <div className="space-y-8 animate-fadeIn">
-          <form onSubmit={saveSettings} className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
+          <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div>
                 <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3"><Shield className="w-5 h-5 text-emerald-600" /> Credenciais Mercado Pago</h3>
@@ -4511,14 +4504,15 @@ const MercadoPagoSettingsPanel = () => {
               </button>
 
               <button
-                type="submit"
+                type="button"
+                onClick={saveSettings}
                 disabled={saving}
                 className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
               >
                 {saving ? 'Salvando...' : 'Salvar Credenciais'}
               </button>
             </div>
-          </form>
+          </div>
 
           {/* Quick Info Box */}
           <div className="bg-zinc-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden">
@@ -4928,18 +4922,13 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
     fetchData();
   }, [user.id]);
 
-  const handleUpdateSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateSettings = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     try {
-      const updates = Object.entries(localSettings).map(([key, value]) => ({
-        key,
-        value: String(value),
-        updated_at: new Date().toISOString()
-      }));
-      const { error } = await supabase
-        .from('settings')
-        .upsert(updates, { onConflict: 'key' });
-      if (error) throw error;
+      await fetchJsonWithAuth('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings: localSettings })
+      });
       alert('Configurações atualizadas!');
       onRefreshSettings();
     } catch (err: any) {
@@ -5171,7 +5160,7 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
               </div>
             </header>
 
-            <form onSubmit={handleUpdateSettings} className="space-y-8">
+            <div className="space-y-8">
               {settingsSubTab === 'general' && (() => {
                 const howItWorks = parseJson('landing_how_it_works');
                 const features = parseJson('landing_features');
@@ -5488,14 +5477,15 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
               {settingsSubTab !== 'mercadopago' && (
                 <div className="flex justify-end p-2">
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={() => handleUpdateSettings()}
                     className="w-full md:w-auto px-12 py-5 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 text-lg"
                   >
                     Salvar Alterações
                   </button>
                 </div>
               )}
-            </form>
+            </div>
           </div>
         );
       default: return null;
@@ -5816,15 +5806,10 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
 
   const handleUpdateSettings = async () => {
     try {
-      const updates = Object.entries(localSettings).map(([key, value]) => ({
-        key,
-        value: String(value),
-        updated_at: new Date().toISOString()
-      }));
-      const { error } = await supabase
-        .from('settings')
-        .upsert(updates, { onConflict: 'key' });
-      if (error) throw error;
+      await fetchJsonWithAuth('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings: localSettings })
+      });
       alert('Configurações atualizadas!');
       onRefreshSettings();
     } catch (err: any) {

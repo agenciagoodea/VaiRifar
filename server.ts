@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
 // --- SUPABASE CLIENT CONFIG ---
 const supabaseUrl = 'https://azzgpctfijfzhhmbrbdg.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6emdwY3RmaWpmemhobWJyYmRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5MTcyODgsImV4cCI6MjA4NzQ5MzI4OH0.rDFa9vbK_N8MzCbWxUPY6cMbSo3dx5_LgID-VHZlKHM';
+const hasServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
@@ -25,6 +26,10 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     }
   }
 });
+
+if (!hasServiceRoleKey) {
+  console.warn("SUPABASE_SERVICE_ROLE_KEY ausente. Rotas server-side podem falhar em tabelas protegidas por RLS.");
+}
 
 // --- CRYPTO HELPERS ---
 const ALGORITHM = "aes-256-cbc";
@@ -109,13 +114,138 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    next();
+  });
+
   // --- API ROUTES ---
 
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ status: "ok", supabaseServiceRoleConfigured: hasServiceRoleKey });
+  });
+
+  app.get("/api/admin/settings", validateAdmin, async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from("settings")
+        .select("*");
+
+      if (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      res.json({ success: true, settings: data || [] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post("/api/admin/settings", validateAdmin, async (req, res) => {
+    try {
+      const settings = req.body?.settings;
+      if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+        return res.status(400).json({ success: false, message: "Payload de configuracoes invalido." });
+      }
+
+      const updates = Object.entries(settings).map(([key, value]) => ({
+        key,
+        value: String(value ?? ""),
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from("settings")
+        .upsert(updates, { onConflict: "key" });
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+          hint: hasServiceRoleKey ? undefined : "Configure SUPABASE_SERVICE_ROLE_KEY no ambiente do servidor."
+        });
+      }
+
+      res.json({ success: true, message: "Configuracoes atualizadas com sucesso." });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
   });
 
   // --- MERCADO PAGO INTEGRATION ENDPOINTS ---
+
+  app.get("/api/payment-configs/me", validateUser, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { data, error } = await supabase
+        .from("payment_configs")
+        .select("*")
+        .eq("user_id", userId)
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      res.json({ success: true, config: data || null });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post("/api/payment-configs/me", validateUser, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const allowedFields = [
+        "pix_key_type",
+        "pix_key",
+        "pix_holder_name",
+        "mp_access_token",
+        "mp_public_key"
+      ];
+
+      const payload: Record<string, any> = {
+        user_id: userId,
+        updated_at: new Date().toISOString()
+      };
+
+      for (const field of allowedFields) {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+          payload[field] = req.body[field] ?? "";
+        }
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from("payment_configs")
+        .select("id")
+        .eq("user_id", userId)
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingError) {
+        return res.status(400).json({ success: false, message: existingError.message });
+      }
+
+      const result = existing
+        ? await supabase.from("payment_configs").update(payload).eq("id", existing.id)
+        : await supabase.from("payment_configs").insert([payload]);
+
+      if (result.error) {
+        return res.status(400).json({
+          success: false,
+          message: result.error.message,
+          hint: hasServiceRoleKey ? undefined : "Configure SUPABASE_SERVICE_ROLE_KEY no ambiente do servidor."
+        });
+      }
+
+      res.json({ success: true, message: "Configuracao salva com sucesso." });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
 
   // Get active public key
   app.get("/api/mercado-pago/public-key", async (req, res) => {
