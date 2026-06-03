@@ -4894,7 +4894,6 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
   const fetchData = async () => {
     if (!user?.id) return;
     try {
-      console.time('SuperAdmin-Init');
       const [campaignsResult, organizersResult, paidOrdersResult, usersResult] = await Promise.all([
         supabase.from('campaigns').select('*', { count: 'exact', head: true }),
         supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'organizer'),
@@ -4912,7 +4911,6 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
       });
 
       if (usersResult.data) setUsers(usersResult.data);
-      console.timeEnd('SuperAdmin-Init');
     } catch (err) {
       console.error('Erro ao buscar dados do super admin:', err);
     }
@@ -7428,7 +7426,6 @@ export default function App() {
     });
 
     const init = async () => {
-      console.time('App-Init');
       try {
         // Buscar tudo em paralelo
         const [sessionResult, settingsResult, campaignsResult] = await Promise.all([
@@ -7496,7 +7493,6 @@ export default function App() {
       } catch (err) {
         console.error('Erro na inicialização:', err);
       } finally {
-        console.timeEnd('App-Init');
       }
     };
 
