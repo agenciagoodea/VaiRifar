@@ -524,6 +524,11 @@ export async function createApp(options: AppOptions = {}) {
         return res.status(400).json({ success: false, message: "Ambiente ativo invalido. Use sandbox ou production." });
       }
 
+      if (!process.env.MP_ENCRYPTION_KEY) {
+        adminLog("mercado_pago", "save-settings", "error", "MP_ENCRYPTION_KEY ausente no backend.");
+        return res.status(500).json({ success: false, message: "MP_ENCRYPTION_KEY ausente no backend. Configure a variavel na Vercel antes de salvar credenciais." });
+      }
+
       const { data: currentSettings } = await supabase
         .from("mercado_pago_settings")
         .select("*")
@@ -566,11 +571,14 @@ export async function createApp(options: AppOptions = {}) {
       }
 
       if (resultError) {
+        adminLog("mercado_pago", "save-settings", "error", "Falha ao gravar credenciais Mercado Pago no Supabase.", resultError);
         return res.status(400).json({ success: false, message: resultError.message });
       }
 
-      res.json({ success: true, message: "Configurações salvas com sucesso!" });
+      adminLog("mercado_pago", "save-settings", "success", `Credenciais Mercado Pago salvas para ambiente ${active_environment || "sandbox"}.`);
+      res.json({ success: true, message: "Configura??es salvas com sucesso!" });
     } catch (err: any) {
+      adminLog("mercado_pago", "save-settings", "error", "Erro inesperado ao salvar credenciais Mercado Pago.", err);
       res.status(500).json({ success: false, message: err.message });
     }
   });

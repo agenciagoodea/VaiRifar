@@ -86,6 +86,67 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
+const SETTINGS_CACHE_KEY = 'vairifar-global-settings-v1';
+
+const normalizeSettingsRows = (settingsRows: any[] = []) => (
+  settingsRows.reduce((acc: Record<string, any>, setting: any) => {
+    if (setting?.key) acc[setting.key] = setting.value;
+    return acc;
+  }, {})
+);
+
+const readCachedSettings = () => {
+  try {
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    localStorage.removeItem(SETTINGS_CACHE_KEY);
+    return null;
+  }
+};
+
+const persistSettingsCache = (settings: Record<string, any>) => {
+  localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settings));
+};
+
+const applySiteTheme = (settings: Record<string, any>) => {
+  const primaryColor = settings.primary_color || '#00d18e';
+  const secondaryColor = settings.secondary_color || '#ff6321';
+  const buttonColor = settings.button_color || secondaryColor;
+  const backgroundColor = settings.background_color || '#fafafa';
+  const textColor = settings.text_color || '#18181b';
+
+  document.documentElement.style.setProperty('--primary-color', primaryColor);
+  document.documentElement.style.setProperty('--secondary-color', secondaryColor);
+  document.documentElement.style.setProperty('--accent-color', buttonColor);
+  document.documentElement.style.setProperty('--background-color', backgroundColor);
+  document.documentElement.style.setProperty('--text-color', textColor);
+  document.documentElement.style.setProperty('--color-brand-green', primaryColor);
+  document.documentElement.style.setProperty('--color-brand-orange', buttonColor);
+  document.documentElement.style.setProperty('--color-primary', primaryColor);
+  document.documentElement.style.setProperty('--color-secondary', secondaryColor);
+  document.documentElement.style.setProperty('--color-button', buttonColor);
+
+  if (settings.site_theme === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+};
+
+const preloadSiteLogo = (settings: Record<string, any>) => {
+  const logoUrl = settings.site_logo_url || settings.logo_url;
+  if (!logoUrl || document.querySelector(`link[rel="preload"][href="${logoUrl}"]`)) return;
+
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'image';
+  link.href = logoUrl;
+  document.head.appendChild(link);
+};
+
 const clearLocalAuthState = async () => {
   try {
     await supabase.auth.signOut({ scope: 'local' });
@@ -123,8 +184,22 @@ const fetchJsonWithAuth = async (url: string, options: RequestInit = {}) => {
       headers.set('Content-Type', 'application/json');
     }
 
-    const response = await fetch(url, { ...options, headers });
-    const data = await response.json().catch(() => ({}));
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+
+    let response: Response;
+    let data: any;
+    try {
+      response = await fetch(url, { ...options, headers, signal: controller.signal });
+      data = await response.json().catch(() => ({}));
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        throw new Error('Tempo limite excedido. Verifique a conexao e tente novamente.');
+      }
+      throw err;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
 
     return { response, data };
   };
@@ -4154,9 +4229,9 @@ const MercadoPagoSettingsPanel = () => {
         body: JSON.stringify({
           active_environment: activeEnv,
           public_key_test: publicKeyTest,
-          access_token_test: accessTokenTest,
+          access_token_test: accessTokenTest.includes('*') ? '' : accessTokenTest,
           public_key_production: publicKeyProd,
-          access_token_production: accessTokenProd
+          access_token_production: accessTokenProd.includes('*') ? '' : accessTokenProd
         })
       });
       if (data.success) {
@@ -4873,7 +4948,7 @@ const MercadoPagoSettingsPanel = () => {
   );
 };
 
-const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout }: { user: User, globalSettings: any, onRefreshSettings: () => void, onLogout: () => void }) => {
+const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout }: { user: User, globalSettings: any, onRefreshSettings: () => void | Promise<any>, onLogout: () => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'settings'>('stats');
@@ -4924,8 +4999,11 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
         method: 'POST',
         body: JSON.stringify({ settings: localSettings })
       });
-      alert('Configurações atualizadas!');
-      onRefreshSettings();
+      persistSettingsCache(localSettings);
+      applySiteTheme(localSettings);
+      preloadSiteLogo(localSettings);
+      alert('Configura??es atualizadas!');
+      await onRefreshSettings();
     } catch (err: any) {
       alert(err.message || 'Erro ao salvar configurações');
     }
@@ -7360,22 +7438,35 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-  const [settings, setSettings] = useState<any>({});
+  const [settings, setSettings] = useState<any>(() => {
+    const cached = readCachedSettings();
+    if (cached) {
+      applySiteTheme(cached);
+      preloadSiteLogo(cached);
+      return cached;
+    }
+    return null;
+  });
+  const [settingsReady, setSettingsReady] = useState(() => Boolean(readCachedSettings()));
 
   const fetchSettings = async () => {
     try {
-      const { data: settingsRows } = await supabase
+      const { data: settingsRows, error } = await supabase
         .from('settings')
         .select('*');
-      if (settingsRows) {
-        const settingsMap = settingsRows.reduce((acc: any, s: any) => {
-          acc[s.key] = s.value;
-          return acc;
-        }, {});
-        setSettings(settingsMap);
-      }
+      if (error) throw error;
+
+      const settingsMap = normalizeSettingsRows(settingsRows || []);
+      persistSettingsCache(settingsMap);
+      applySiteTheme(settingsMap);
+      preloadSiteLogo(settingsMap);
+      setSettings(settingsMap);
+      setSettingsReady(true);
+      return settingsMap;
     } catch (err) {
-      console.error('Erro ao buscar configurações:', err);
+      console.error('Erro ao buscar configura??es:', err);
+      setSettingsReady(Boolean(settings));
+      return settings;
     }
   };
 
@@ -7413,20 +7504,11 @@ export default function App() {
     const init = async () => {
       try {
         // Buscar tudo em paralelo
-        const [sessionResult, settingsResult, campaignsResult] = await Promise.all([
+        const [sessionResult, _settingsMap, campaignsResult] = await Promise.all([
           supabase.auth.getSession(),
-          supabase.from('settings').select('*'),
+          fetchSettings(),
           supabase.from('campaigns').select('*').in('status', ['active', 'finished']).order('created_at', { ascending: false })
         ]);
-
-        // Processar Settings
-        if (settingsResult.data) {
-          const settingsMap = settingsResult.data.reduce((acc: any, s: any) => {
-            acc[s.key] = s.value;
-            return acc;
-          }, {});
-          setSettings(settingsMap);
-        }
 
         // Processar Campanhas
         if (campaignsResult.data) {
@@ -7495,21 +7577,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const primaryColor = settings.primary_color || '#00d18e';
-    const secondaryColor = settings.secondary_color || '#ff6321';
-    const buttonColor = settings.button_color || secondaryColor;
+    if (!settings) return;
 
-    document.documentElement.style.setProperty('--color-brand-green', primaryColor);
-    document.documentElement.style.setProperty('--color-brand-orange', buttonColor);
-    document.documentElement.style.setProperty('--color-primary', primaryColor);
-    document.documentElement.style.setProperty('--color-secondary', secondaryColor);
-    document.documentElement.style.setProperty('--color-button', buttonColor);
+    applySiteTheme(settings);
+    preloadSiteLogo(settings);
 
-    if (settings.site_theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
     // SEO
     if (settings.seo_title) document.title = settings.seo_title;
     const setMeta = (name: string, content: string) => {
@@ -7556,8 +7628,23 @@ export default function App() {
 
   const isDashboard = page === 'dashboard' && user;
 
+  if (!settingsReady || !settings) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center font-sans">
+        <div className="flex flex-col items-center gap-4 text-zinc-500">
+          <div className="w-12 h-12 rounded-2xl bg-white border border-zinc-100 shadow-sm flex items-center justify-center">
+            <Ticket className="w-6 h-6 text-zinc-300" />
+          </div>
+          <div className="w-36 h-2 rounded-full bg-zinc-200 overflow-hidden">
+            <div className="h-full w-1/2 bg-zinc-300 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-zinc-50 font-sans selection:bg-emerald-100 selection:text-emerald-900" style={{ backgroundColor: 'var(--background-color)', color: 'var(--text-color)' }}>
       {!isDashboard && <Navbar user={user} onLogout={handleLogout} onNavigate={setPage} settings={settings} />}
 
       <main>
