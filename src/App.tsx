@@ -86,14 +86,26 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
+const clearLocalAuthState = async () => {
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch {
+    // Local cleanup below is the source of truth for stale browser sessions.
+  }
+
+  localStorage.removeItem('rifapro-user');
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith('sb-') && key.includes('auth-token'))
+    .forEach((key) => localStorage.removeItem(key));
+};
+
 const getAccessTokenOrThrow = async (refresh = false) => {
   const { data, error } = refresh
     ? await supabase.auth.refreshSession()
     : await supabase.auth.getSession();
 
   if (error || !data.session) {
-    await supabase.auth.signOut();
-    localStorage.removeItem('rifapro-user');
+    await clearLocalAuthState();
     throw new Error('Sessao invalida ou expirada. Faca login novamente.');
   }
 
@@ -7440,6 +7452,12 @@ export default function App() {
         }
 
         // Processar Sessão
+        if (sessionResult.error) {
+          await clearLocalAuthState();
+          setUser(null);
+          return;
+        }
+
         const session = sessionResult.data.session;
         if (session?.user) {
           // Buscar perfil apenas se não tivermos ou se houver mudança
@@ -7461,7 +7479,7 @@ export default function App() {
           }
         } else {
           setUser(null);
-          localStorage.removeItem('rifapro-user');
+          await clearLocalAuthState();
         }
       } catch (err) {
         console.error('Erro na inicialização:', err);
