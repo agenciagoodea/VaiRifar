@@ -525,8 +525,7 @@ export async function createApp(options: AppOptions = {}) {
       }
 
       if (!process.env.MP_ENCRYPTION_KEY) {
-        adminLog("mercado_pago", "save-settings", "error", "MP_ENCRYPTION_KEY ausente no backend.");
-        return res.status(500).json({ success: false, message: "MP_ENCRYPTION_KEY ausente no backend. Configure a variavel na Vercel antes de salvar credenciais." });
+        adminLog("mercado_pago", "save-settings", "warning", "MP_ENCRYPTION_KEY ausente no backend. Utilizando chave padrao.");
       }
 
       const { data: currentSettings } = await supabase

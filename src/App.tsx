@@ -57,7 +57,8 @@ import {
   ChevronUp,
   FileText,
   Link2,
-  BarChart3
+  BarChart3,
+  Trophy
 } from 'lucide-react';
 import type { Campaign, User, Order } from './types';
 import { supabase } from './lib/supabase';
@@ -1266,14 +1267,13 @@ const Navbar = ({ user, onLogout, onNavigate, settings }: { user: User | null, o
   return (
     <nav className="bg-white border-b border-zinc-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate('home')}>
+        <div className="flex justify-between h-20 items-center">
+          <div className="flex items-center cursor-pointer" onClick={() => onNavigate('home')}>
             {settings?.site_logo_url ? (
-              <img src={settings.site_logo_url} alt="Logo" className="h-9 w-auto object-contain" />
+              <img src={settings.site_logo_url} alt="Logo" className="h-14 w-auto object-contain" />
             ) : (
-              <div className="bg-emerald-600 p-2 rounded-lg"><Ticket className="text-white w-6 h-6" /></div>
+              <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-100"><Ticket className="text-white w-8 h-8" /></div>
             )}
-            <span className="text-xl font-bold tracking-tight text-zinc-900">{settings?.site_name || 'RifaPro'}</span>
           </div>
 
           {/* Desktop */}
@@ -2568,33 +2568,130 @@ const HomePage = ({ campaigns, onSelectCampaign, settings }: { campaigns: Campai
   const features = (() => { try { return JSON.parse(settings?.landing_features || '[]'); } catch { return []; } })();
   const faqItems = (() => { try { return JSON.parse(settings?.landing_faq || '[]'); } catch { return []; } })();
   const ctaText = settings?.landing_cta_text || 'Aqui você cria a sua campanha e recebe a arrecadação diretamente em sua conta!';
-  const iconMap: Record<string, any> = { Shield, Zap, Star, Globe, Users, CheckCircle2, Rocket, Gift, DollarSign, Ticket, Clock, Eye };
+  const iconMap: Record<string, any> = { Shield, Zap, Star, Globe, Users, CheckCircle2, Rocket, Gift, DollarSign, Ticket, Clock, Eye, Trophy };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-24">
-      {finishedCampaigns.length > 0 && (
-        <section className="animate-in fade-in slide-in-from-top-8 duration-700">
-          <div className="flex items-center gap-4 mb-10">
-            <div className="bg-yellow-400 p-3 rounded-2xl shadow-lg shadow-yellow-100"><Gift className="w-6 h-6 text-white" /></div>
+    <div className="w-full min-h-screen bg-[#fafbfe] relative overflow-hidden pb-12">
+      {/* Background decorative elements */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-[400px] right-1/4 w-[600px] h-[600px] bg-amber-500/5 rounded-full blur-[150px] pointer-events-none" />
+
+      {/* HERO SECTION */}
+      <section className="relative pt-20 pb-20 px-4 max-w-7xl mx-auto text-center space-y-10">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-40 pointer-events-none -z-10" />
+        
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100/80 text-xs font-bold shadow-sm tracking-wide uppercase">
+            <Zap className="w-3.5 h-3.5 text-emerald-600 animate-pulse" /> Sorteios Rápidos & 100% Seguros
+          </div>
+          
+          <h1 className="text-5xl md:text-7xl font-black text-zinc-900 tracking-tight leading-tight">
+            Sua sorte está a <br />
+            <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">um clique de distância</span>
+          </h1>
+          
+          <p className="text-zinc-500 text-lg md:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
+            Participe de campanhas auditadas, transparentes e concorra a prêmios incríveis. Compre suas cotas em segundos via Pix.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 max-w-md mx-auto pt-4">
+          <a
+            href="#campanhas"
+            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl font-bold text-base shadow-xl shadow-emerald-600/10 hover:shadow-emerald-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-center"
+          >
+            Explorar Sorteios
+          </a>
+          <button
+            onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+            className="w-full sm:w-auto bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-600 px-8 py-4 rounded-2xl font-bold text-base hover:scale-[1.02] active:scale-[0.98] transition-all shadow-sm"
+          >
+            Como Funciona?
+          </button>
+        </div>
+
+        {/* HERO TRUST RIBBON */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12 max-w-5xl mx-auto text-left">
+          <div className="bg-white/60 backdrop-blur-md p-6 rounded-3xl border border-zinc-100 flex items-start gap-4 shadow-sm hover:shadow-md transition-all">
+            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shrink-0">
+              <Shield className="w-6 h-6" />
+            </div>
             <div>
-              <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Ganhadores Recentes</h2>
-              <p className="text-zinc-400 font-medium">Confira quem já levou os prêmios pra casa!</p>
+              <h4 className="font-bold text-zinc-900 text-base">Compra Garantida</h4>
+              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">Seus bilhetes são vinculados diretamente ao seu CPF e confirmados automaticamente.</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+          <div className="bg-white/60 backdrop-blur-md p-6 rounded-3xl border border-zinc-100 flex items-start gap-4 shadow-sm hover:shadow-md transition-all">
+            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shrink-0">
+              <Zap className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-zinc-900 text-base">PIX Instantâneo</h4>
+              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">Sem burocracia. O pagamento e a emissão das cotas acontecem no mesmo minuto.</p>
+            </div>
+          </div>
+
+          <div className="bg-white/60 backdrop-blur-md p-6 rounded-3xl border border-zinc-100 flex items-start gap-4 shadow-sm hover:shadow-md transition-all">
+            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-zinc-900 text-base">Resultados Auditados</h4>
+              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">Sorteios transparentes com extração auditável e divulgação pública de ganhadores.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FINISHED CAMPAIGNS (RECENT WINNERS) */}
+      {finishedCampaigns.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-in fade-in slide-in-from-top-8 duration-700">
+          <div className="flex items-center gap-4 mb-10">
+            <div className="bg-amber-400 p-3 rounded-2xl shadow-lg shadow-amber-400/10 text-white">
+              <Trophy className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Ganhadores Recentes</h2>
+              <p className="text-zinc-400 font-medium">Confira quem já levou os prêmios para casa!</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {finishedCampaigns.slice(0, 4).map((c) => {
               const winners = (c as any).winners || [];
               const firstWinner = winners[0];
               return (
-                <div key={c.id} className="glass-card p-6 border-yellow-200/50 bg-gradient-to-br from-white to-yellow-50/30 group hover:scale-[1.02] transition-all cursor-pointer" onClick={() => onSelectCampaign(c)}>
+                <div
+                  key={c.id}
+                  onClick={() => onSelectCampaign(c)}
+                  className="bg-white rounded-[2rem] border border-amber-100/60 p-6 bg-gradient-to-br from-white to-amber-50/10 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-amber-400/5 rounded-bl-[4rem] pointer-events-none" />
+                  
                   <div className="relative mb-6">
-                    <img src={c.image_url} alt={c.title} className="w-full h-32 object-cover rounded-2xl grayscale group-hover:grayscale-0 transition-all opacity-40" />
-                    <div className="absolute inset-0 flex items-center justify-center"><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-3xl font-black text-yellow-500 shadow-xl border-4 border-yellow-400">{firstWinner?.number || '---'}</div></div>
-                    <div className="absolute -top-2 -right-2 bg-zinc-900 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Encerrada</div>
+                    <img
+                      src={c.image_url || `https://picsum.photos/seed/${c.id}/600/400`}
+                      alt={c.title}
+                      className="w-full h-32 object-cover rounded-2xl opacity-40 group-hover:opacity-70 transition-opacity duration-300"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-20 h-20 bg-white rounded-full flex flex-col items-center justify-center text-zinc-900 shadow-xl border-4 border-amber-400">
+                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest leading-none">Cota</span>
+                        <span className="text-2xl font-black mt-0.5 leading-none">{firstWinner?.number || '---'}</span>
+                      </div>
+                    </div>
+                    <div className="absolute top-2 right-2 bg-zinc-900 text-white text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      Sorteado
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em] mb-1">{c.title}</p>
-                    <h3 className="text-xl font-black text-zinc-900 truncate">{firstWinner?.customer || 'Sorteado'}</h3>
-                    <p className="text-[10px] font-bold text-yellow-600 bg-yellow-100 inline-block px-3 py-1 rounded-lg mt-2 uppercase">{firstWinner?.prize_name || 'Prêmio'}</p>
+
+                  <div className="text-center space-y-2">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] truncate">{c.title}</p>
+                    <h3 className="text-xl font-black text-zinc-900 truncate leading-tight">{firstWinner?.customer || 'Ganhador'}</h3>
+                    <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-100 text-amber-700 px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wide">
+                      <Gift className="w-3.5 h-3.5 shrink-0" /> {firstWinner?.prize_name || 'Prêmio'}
+                    </div>
                   </div>
                 </div>
               );
@@ -2602,72 +2699,153 @@ const HomePage = ({ campaigns, onSelectCampaign, settings }: { campaigns: Campai
           </div>
         </section>
       )}
-      <section>
-        <header className="mb-12 text-center max-w-2xl mx-auto">
-          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-4xl md:text-5xl font-black text-zinc-900 tracking-tight mb-4">
-            Participe dos Melhores <span className="text-emerald-600">Sorteios Online</span>
-          </motion.h1>
-          <p className="text-zinc-500 text-lg">Campanhas auditadas, seguras e com premiações incríveis. Escolha sua sorte!</p>
-        </header>
+
+      {/* ACTIVE CAMPAIGNS */}
+      <section id="campanhas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-24">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wider mb-3">
+              ⚡ Sorteios Ativos
+            </div>
+            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Campanhas em Destaque</h2>
+            <p className="text-zinc-400 font-medium mt-1">Garanta sua participação antes que as cotas esgotem!</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {activeCampaigns.map((campaign) => (<CampaignCard key={campaign.id} campaign={campaign} onClick={() => onSelectCampaign(campaign)} />))}
+          {activeCampaigns.map((campaign) => (
+            <CampaignCard key={campaign.id} campaign={campaign} onClick={() => onSelectCampaign(campaign)} />
+          ))}
+          
           {activeCampaigns.length === 0 && (
-            <div className="col-span-full py-20 text-center">
-              <div className="w-24 h-24 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-6"><Ticket className="w-10 h-10 text-zinc-300" /></div>
+            <div className="col-span-full py-24 text-center bg-white rounded-[2.5rem] border border-zinc-100 shadow-sm max-w-xl mx-auto px-6">
+              <div className="w-20 h-20 bg-zinc-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-zinc-100/50">
+                <Ticket className="w-8 h-8 text-zinc-300" />
+              </div>
               <h3 className="text-xl font-black text-zinc-900 mb-2">Nenhuma campanha ativa no momento</h3>
-              <p className="text-zinc-400">Volte em breve para novas oportunidades!</p>
+              <p className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed">Novas campanhas estão sendo preparadas pelos organizadores. Volte em breve para participar!</p>
             </div>
           )}
         </div>
       </section>
+
+      {/* HOW IT WORKS */}
       {howItWorks.length > 0 && (
-        <section>
-          <div className="text-center mb-12"><h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Como Funciona</h2><p className="text-zinc-500 mt-2">É simples e rápido participar!</p></div>
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center mb-16 space-y-2">
+            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Como Funciona</h2>
+            <p className="text-zinc-500 font-medium">É muito simples e rápido participar dos nossos sorteios!</p>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {howItWorks.map((step: any, i: number) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.15 }} className="text-center p-8 bg-white rounded-3xl border border-zinc-100 shadow-sm hover:shadow-lg transition-all">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-black text-2xl mx-auto mb-6">{i + 1}</div>
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="bg-white rounded-[2rem] border border-zinc-100 p-8 shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-[5rem] pointer-events-none" />
+                <div className="w-14 h-14 bg-emerald-50 text-emerald-700 rounded-2xl flex items-center justify-center font-black text-xl mb-6 shadow-sm border border-emerald-100/50 group-hover:scale-110 transition-transform">
+                  {i + 1}
+                </div>
                 <h3 className="text-xl font-bold text-zinc-900 mb-3">{step.title}</h3>
-                <p className="text-zinc-500 text-sm">{step.text}</p>
+                <p className="text-zinc-400 text-sm leading-relaxed">{step.text}</p>
               </motion.div>
             ))}
           </div>
         </section>
       )}
+
+      {/* FEATURES */}
       {features.length > 0 && (
-        <section>
-          <div className="text-center mb-12"><h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Funcionalidades</h2><p className="text-zinc-500 mt-2">Tudo que você precisa em uma plataforma.</p></div>
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center mb-16 space-y-2">
+            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Tudo que Você Precisa</h2>
+            <p className="text-zinc-500 font-medium">Oferecemos recursos premium para dar total segurança aos participantes.</p>
+          </div>
+          
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             {features.map((feat: any, i: number) => {
-              const Ic = iconMap[feat.icon] || Star; return (
-                <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.1 }} className="text-center p-6 bg-white rounded-3xl border border-zinc-100 shadow-sm hover:shadow-lg hover:scale-105 transition-all">
-                  <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-600"><Ic className="w-6 h-6" /></div>
-                  <p className="font-bold text-zinc-900 text-sm">{feat.title}</p>
+              const Ic = iconMap[feat.icon] || Star;
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05 }}
+                  className="bg-white rounded-3xl border border-zinc-100 p-6 text-center shadow-sm hover:shadow-lg hover:scale-105 transition-all group"
+                >
+                  <div className="w-14 h-14 bg-emerald-50/50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-600 border border-emerald-100/20 group-hover:scale-110 transition-transform">
+                    <Ic className="w-6 h-6" />
+                  </div>
+                  <p className="font-bold text-zinc-900 text-sm tracking-tight">{feat.title}</p>
                 </motion.div>
               );
             })}
           </div>
         </section>
       )}
-      <section className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-[2.5rem] p-12 md:p-16 text-center text-white relative overflow-hidden">
-        <div className="relative z-10">
-          <h2 className="text-3xl md:text-4xl font-black mb-4">{ctaText}</h2>
-          <p className="text-emerald-100 mb-8 max-w-lg mx-auto">Crie sua campanha agora e comece a arrecadar de forma segura e transparente.</p>
-          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="bg-white text-emerald-700 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-emerald-50 transition-all shadow-xl">Criar Minha Campanha</button>
+
+      {/* CTA SECTION */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="bg-gradient-to-br from-emerald-800 via-emerald-900 to-zinc-950 rounded-[3rem] p-10 md:p-20 text-center text-white relative overflow-hidden shadow-2xl">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(16,185,129,0.15),transparent_100%)] pointer-events-none" />
+          <div className="absolute -top-48 -left-48 w-96 h-96 bg-emerald-600/10 blur-[120px] rounded-full pointer-events-none" />
+          <div className="absolute -bottom-48 -right-48 w-96 h-96 bg-teal-500/10 blur-[120px] rounded-full pointer-events-none" />
+
+          <div className="relative z-10 max-w-2xl mx-auto space-y-8">
+            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight">{ctaText}</h2>
+            <p className="text-emerald-100/70 text-base md:text-lg font-medium leading-relaxed">
+              Inicie agora mesmo sua campanha na plataforma de rifas mais segura e automatizada do mercado.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="bg-white text-emerald-800 hover:bg-emerald-50 px-10 py-5 rounded-2xl font-black text-base md:text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-xl shadow-zinc-950/20"
+              >
+                Criar Minha Campanha
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 blur-[100px] rounded-full -mr-48 -mt-48"></div>
       </section>
+
+      {/* FAQ SECTION */}
       {faqItems.length > 0 && (
-        <section>
-          <div className="text-center mb-12"><h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Dúvidas Frequentes</h2><p className="text-zinc-500 mt-2">Tire suas dúvidas sobre a plataforma.</p></div>
-          <div className="max-w-3xl mx-auto space-y-4">
+        <section className="max-w-3xl mx-auto px-4 py-12">
+          <div className="text-center mb-12 space-y-2">
+            <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Dúvidas Frequentes</h2>
+            <p className="text-zinc-500 font-medium">Tudo o que você precisa saber sobre como participar ou organizar sorteios.</p>
+          </div>
+          
+          <div className="space-y-4">
             {faqItems.map((faq: any, i: number) => (
-              <div key={i} className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
-                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full px-8 py-5 text-left flex items-center justify-between hover:bg-zinc-50 transition-all">
-                  <span className="font-bold text-zinc-900">{faq.question}</span>
-                  <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
+              <div key={i} className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden transition-all">
+                <button
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="w-full px-6 py-5 text-left flex items-center justify-between hover:bg-zinc-50/50 transition-all focus:outline-none"
+                >
+                  <span className="font-bold text-zinc-800 text-sm md:text-base leading-snug">{faq.question}</span>
+                  <ChevronDown className={`w-5 h-5 text-zinc-400 shrink-0 transition-transform duration-300 ${openFaq === i ? 'rotate-180 text-emerald-600' : ''}`} />
                 </button>
-                {openFaq === i && <div className="px-8 pb-6 text-zinc-500 text-sm leading-relaxed border-t border-zinc-50 pt-4">{faq.answer}</div>}
+                <AnimatePresence initial={false}>
+                  {openFaq === i && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    >
+                      <div className="px-6 pb-6 text-zinc-500 text-xs md:text-sm leading-relaxed border-t border-zinc-50 pt-4">
+                        {faq.answer}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ))}
           </div>
