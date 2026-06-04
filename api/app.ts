@@ -94,6 +94,66 @@ function decrypt(text: string): string {
   return decrypted;
 }
 
+async function getSmtpConfig() {
+  const host = process.env.SMTP_HOST;
+  const port = process.env.SMTP_PORT;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM;
+  const secure = process.env.SMTP_SECURE;
+
+  if (host && port && user && pass && from) {
+    return {
+      host,
+      port: Number(port),
+      secure: String(secure).toLowerCase() === "true" || String(secure).toLowerCase() === "sim" || port === "465",
+      auth: { user, pass },
+      from
+    };
+  }
+
+  // Fallback to settings table
+  const { data: dbSettings, error } = await supabase
+    .from("settings")
+    .select("*");
+
+  if (error || !dbSettings) {
+    throw new Error("Configurações SMTP não encontradas no ambiente e falha ao ler do banco de dados.");
+  }
+
+  const settingsMap: Record<string, string> = dbSettings.reduce((acc: any, row: any) => {
+    if (row.key) acc[row.key] = row.value;
+    return acc;
+  }, {});
+
+  const dbHost = settingsMap.smtp_host;
+  const dbPort = settingsMap.smtp_port;
+  const dbUser = settingsMap.smtp_user;
+  const dbPass = settingsMap.smtp_pass;
+  const dbFromName = settingsMap.smtp_from_name || "";
+  const dbFromEmail = settingsMap.smtp_from_email || dbUser;
+  const dbFrom = dbFromName ? `${dbFromName} <${dbFromEmail}>` : dbFromEmail;
+  const dbSecure = settingsMap.smtp_secure || "false";
+
+  if (!dbHost || !dbPort || !dbUser || !dbPass || !dbFromEmail) {
+    const missing = [];
+    if (!dbHost) missing.push("SMTP_HOST");
+    if (!dbPort) missing.push("SMTP_PORT");
+    if (!dbUser) missing.push("SMTP_USER");
+    if (!dbPass) missing.push("SMTP_PASS");
+    if (!dbFromEmail) missing.push("SMTP_FROM");
+    throw new Error(`Configurações SMTP ausentes no ambiente e no banco de dados (tabela settings). Faltando: ${missing.join(", ")}`);
+  }
+
+  return {
+    host: dbHost,
+    port: Number(dbPort),
+    secure: String(dbSecure).toLowerCase() === "true" || String(dbSecure).toLowerCase() === "sim" || dbPort === "465",
+    auth: { user: dbUser, pass: dbPass },
+    from: dbFrom
+  };
+}
+
 // --- MIDDLEWARES ---
 async function validateAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
@@ -258,11 +318,8 @@ export async function createApp(options: AppOptions = {}) {
     let logId: string | number | null = null;
 
     try {
-      const requiredSmtp = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"];
-      const missing = requiredSmtp.filter((name) => !process.env[name]);
-      if (missing.length) {
-        throw new Error(`Variaveis SMTP ausentes: ${missing.join(", ")}`);
-      }
+      // Obter configuração SMTP via fallback inteligente
+      const smtpConfig = await getSmtpConfig();
 
       const { data: insertedLog, error: insertError } = await supabase
         .from("email_logs")
@@ -280,19 +337,15 @@ export async function createApp(options: AppOptions = {}) {
       if (insertError) throw insertError;
       logId = insertedLog?.id || null;
 
-      const secure = String(process.env.SMTP_SECURE || "false").toLowerCase();
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: secure === "true" || secure === "sim" || process.env.SMTP_PORT === "465",
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
-        }
+        host: smtpConfig.host,
+        port: smtpConfig.port,
+        secure: smtpConfig.secure,
+        auth: smtpConfig.auth
       });
 
       const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM,
+        from: smtpConfig.from,
         to: recipient,
         subject,
         html

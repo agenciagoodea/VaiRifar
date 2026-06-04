@@ -3,7 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>VaiRifar - Sorteios Online</title>
+    <script>
+      (function() {
+        try {
+          const raw = localStorage.getItem('vairifar-global-settings-v1');
+          if (raw) {
+            const settings = JSON.parse(raw);
+            if (settings && typeof settings === 'object') {
+              const primaryColor = settings.primary_color || '#00d18e';
+              const secondaryColor = settings.secondary_color || '#ff6321';
+              const buttonColor = settings.button_color || secondaryColor;
+              const backgroundColor = settings.background_color || '#fafafa';
+              const textColor = settings.text_color || '#18181b';
+
+              document.documentElement.style.setProperty('--primary-color', primaryColor);
+              document.documentElement.style.setProperty('--secondary-color', secondaryColor);
+              document.documentElement.style.setProperty('--accent-color', buttonColor);
+              document.documentElement.style.setProperty('--background-color', backgroundColor);
+              document.documentElement.style.setProperty('--text-color', textColor);
+              document.documentElement.style.setProperty('--color-brand-green', primaryColor);
+              document.documentElement.style.setProperty('--color-brand-orange', buttonColor);
+              document.documentElement.style.setProperty('--color-primary', primaryColor);
+              document.documentElement.style.setProperty('--color-secondary', secondaryColor);
+              document.documentElement.style.setProperty('--color-button', buttonColor);
+
+              if (settings.site_theme === 'dark') {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+
+              const logoUrl = settings.site_logo_url || settings.logo_url;
+              if (logoUrl) {
+                const link = document.createElement('link');
+                link.rel = 'preload';
+                link.as = 'image';
+                link.href = logoUrl;
+                document.head.appendChild(link);
+              }
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
