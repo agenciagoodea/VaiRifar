@@ -16,6 +16,14 @@ export interface User {
   site_theme?: 'light' | 'dark';
   primary_color?: string;
   logo_url?: string;
+  document?: string;
+  cep?: string;
+  address_street?: string;
+  address_number?: string;
+  address_complement?: string;
+  address_district?: string;
+  address_city?: string;
+  address_state?: string;
 }
 
 export interface Campaign {

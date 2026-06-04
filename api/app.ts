@@ -814,6 +814,13 @@ export async function createApp(options: AppOptions = {}) {
       const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
       const idempotencyKey = `${Date.now()}-${Math.random()}`;
 
+      // Obter o perfil do organizador para coletar CPF e Endereço
+      const { data: organizerProfile } = await supabase
+        .from("profiles")
+        .select("document, cep, address_street, address_number, address_complement, address_district, address_city, address_state")
+        .eq("id", (req as any).user.id)
+        .maybeSingle();
+
       const mpBody: any = {
         transaction_amount: fee,
         description: `Taxa de Ativação - Campanha: ${campaign.title}`,
@@ -823,11 +830,23 @@ export async function createApp(options: AppOptions = {}) {
           last_name: last_name,
           identification: {
             type: "CPF",
-            number: cpf.replace(/\D/g, '')
+            number: (organizerProfile?.document || cpf).replace(/\D/g, '')
           }
         },
         external_reference: campaign_id.toString()
       };
+
+      const zipCode = (organizerProfile?.cep || "").replace(/\D/g, '');
+      if (zipCode) {
+        mpBody.payer.address = {
+          zip_code: zipCode,
+          street_name: organizerProfile?.address_street || "",
+          street_number: organizerProfile?.address_number ? parseInt(organizerProfile.address_number.replace(/\D/g, '')) || 0 : 0,
+          neighborhood: organizerProfile?.address_district || "",
+          city: organizerProfile?.address_city || "",
+          federal_unit: organizerProfile?.address_state || ""
+        };
+      }
 
       // Mercado Pago não aceita URLs de localhost/127.0.0.1 para 'notification_url'.
       // Portanto, omitimos essa chave no ambiente local para evitar erro 400 Bad Request.

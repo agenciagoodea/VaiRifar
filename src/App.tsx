@@ -80,11 +80,96 @@ const mapProfileToUser = (profile: any, email: string): User => ({
   pixel_google: profile.pixel_google || '',
   site_theme: profile.site_theme || 'light',
   primary_color: profile.primary_color || '#ff6b00',
-  logo_url: profile.logo_url || ''
+  logo_url: profile.logo_url || '',
+  document: profile.document || '',
+  cep: profile.cep || '',
+  address_street: profile.address_street || '',
+  address_number: profile.address_number || '',
+  address_complement: profile.address_complement || '',
+  address_district: profile.address_district || '',
+  address_city: profile.address_city || '',
+  address_state: profile.address_state || ''
 });
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
+const formatCpf = (val: string) => {
+  const digits = val.replace(/\D/g, '').substring(0, 11);
+  if (digits.length > 9) {
+    return `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9)}`;
+  } else if (digits.length > 6) {
+    return `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6)}`;
+  } else if (digits.length > 3) {
+    return `${digits.substring(0, 3)}.${digits.substring(3)}`;
+  }
+  return digits;
+};
+
+const calculateCRC16 = (str: string): string => {
+  let crc = 0xFFFF;
+  for (let c = 0; c < str.length; c++) {
+    crc ^= str.charCodeAt(c) << 8;
+    for (let i = 0; i < 8; i++) {
+      if (crc & 0x8000) {
+        crc = (crc << 1) ^ 0x1021;
+      } else {
+        crc = crc << 1;
+      }
+    }
+  }
+  let hex = (crc & 0xFFFF).toString(16).toUpperCase();
+  if (hex.length < 4) hex = '0' + hex;
+  while (hex.length < 4) hex = '0' + hex;
+  return hex;
+};
+
+const cleanString = (str: string): string => {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .replace(/[^a-zA-Z0-9 ]/g, "") // remove caracteres especiais
+    .substring(0, 25);
+};
+
+const generateStaticPix = ({ key, name, city, amount, txid }: { key: string, name: string, city?: string, amount: number, txid?: string }): string => {
+  let cleanKey = key.trim();
+  if (cleanKey.match(/^\+?\d+$/) || cleanKey.includes('(') || cleanKey.includes('-')) {
+    cleanKey = cleanKey.replace(/\D/g, '');
+    if (cleanKey.length === 11 && !cleanKey.startsWith('55')) {
+      cleanKey = '55' + cleanKey;
+    }
+  }
+
+  const cleanName = cleanString(name || 'ORGANIZADOR').trim().substring(0, 25);
+  const cleanCity = cleanString(city || 'SAO PAULO').trim().substring(0, 15);
+  
+  const payloadFormat = "000201";
+  
+  // Merchant Account Info
+  const gui = "0014br.gov.bcb.pix";
+  const keyTag = "01" + String(cleanKey.length).padStart(2, '0') + cleanKey;
+  const merchantAccountInfo = "26" + String(gui.length + keyTag.length).padStart(2, '0') + gui + keyTag;
+  
+  const merchantCategory = "52040000";
+  const transactionCurrency = "5303986";
+  
+  const amountStr = amount.toFixed(2);
+  const transactionAmount = "54" + String(amountStr.length).padStart(2, '0') + amountStr;
+  
+  const countryCode = "5802BR";
+  
+  const merchantNameTag = "59" + String(cleanName.length).padStart(2, '0') + cleanName;
+  const merchantCityTag = "60" + String(cleanCity.length).padStart(2, '0') + cleanCity;
+  
+  const cleanTxid = cleanString(txid || '***').substring(0, 25);
+  const txidTag = "05" + String(cleanTxid.length).padStart(2, '0') + cleanTxid;
+  const additionalData = "62" + String(txidTag.length).padStart(2, '0') + txidTag;
+  
+  let pixCode = payloadFormat + merchantAccountInfo + merchantCategory + transactionCurrency + transactionAmount + countryCode + merchantNameTag + merchantCityTag + additionalData + "6304";
+  const crc = calculateCRC16(pixCode);
+  return pixCode + crc;
 };
 
 const SETTINGS_CACHE_KEY = 'vairifar-global-settings-v1';
@@ -308,7 +393,7 @@ const TaxTableModal = ({ onClose, settings }: { onClose: () => void, settings: a
   );
 };
 
-const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings }: { campaign: Campaign, onClose: () => void, onPublished: () => void, settings: any, globalSettings: any }) => {
+const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings, user }: { campaign: Campaign, onClose: () => void, onPublished: () => void, settings: any, globalSettings: any, user: User }) => {
   const [calculating, setCalculating] = useState(true);
   const [fee, setFee] = useState(0);
   const potentialRevenue = campaign.total_tickets * campaign.ticket_price;
@@ -320,9 +405,9 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
   const [publicKey, setPublicKey] = useState<string | null>(null);
 
   // General Customer Info
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [cpf, setCpf] = useState('');
+  const [email, setEmail] = useState(user?.email || '');
+  const [name, setName] = useState(user?.name || '');
+  const [cpf, setCpf] = useState(user?.document ? formatCpf(user.document) : '');
 
   // Credit Card Info
   const [cardNumber, setCardNumber] = useState('');
@@ -2551,6 +2636,7 @@ const ManageCampaign = ({ campaign, onBack, onView, onEdit, globalSettings, onRe
             onPublished={onRefresh}
             settings={globalSettings}
             globalSettings={globalSettings}
+            user={user!}
           />
         )}
       </AnimatePresence>
@@ -3444,10 +3530,25 @@ const CampaignDetails = ({ campaign, onBack, globalSettings }: { campaign: Campa
 
                 {pixConfig ? (
                   <div className="space-y-4">
+                    {/* Exibição do QR Code Dinâmico/Estático escaneável */}
+                    <div className="flex flex-col items-center justify-center p-6 bg-zinc-50 rounded-2xl border border-zinc-100 mb-4">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(generateStaticPix({
+                          key: pixConfig.pix_key,
+                          name: pixConfig.pix_name || 'ORGANIZADOR',
+                          amount: totalAmount,
+                          txid: orderId ? String(orderId) : '***'
+                        }))}`}
+                        alt="QR Code PIX"
+                        className="w-44 h-44 mb-3 border-4 border-white shadow-sm"
+                      />
+                      <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Escaneie com o app do seu Banco</span>
+                    </div>
+
                     <div className="flex items-start gap-3">
                       <QrCode className="w-6 h-6 text-emerald-500 shrink-0 mt-1" />
                       <p className="text-sm text-zinc-500 mb-4">
-                        Copie o código Pix abaixo e cole em seu app de pagamento para finalizar a compra.
+                        Copie o código Pix Copia e Cola abaixo e cole em seu app de pagamento para finalizar a compra.
                       </p>
                     </div>
 
@@ -3455,11 +3556,29 @@ const CampaignDetails = ({ campaign, onBack, globalSettings }: { campaign: Campa
                       <input
                         type="text"
                         readOnly
-                        value={pixConfig.pix_key}
+                        value={generateStaticPix({
+                          key: pixConfig.pix_key,
+                          name: pixConfig.pix_name || 'ORGANIZADOR',
+                          amount: totalAmount,
+                          txid: orderId ? String(orderId) : '***'
+                        })}
                         className="w-full bg-transparent text-sm font-mono text-zinc-500 px-3 outline-none"
                       />
-                      <button onClick={handleCopyPix} className={`px-6 py-2 rounded-lg font-bold text-sm transition-all text-white ${copied ? 'bg-emerald-600' : 'bg-brand-orange'}`}>
-                        Copiar
+                      <button
+                        onClick={() => {
+                          const pixPayload = generateStaticPix({
+                            key: pixConfig.pix_key,
+                            name: pixConfig.pix_name || 'ORGANIZADOR',
+                            amount: totalAmount,
+                            txid: orderId ? String(orderId) : '***'
+                          });
+                          navigator.clipboard.writeText(pixPayload);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 3000);
+                        }}
+                        className={`px-6 py-2 rounded-lg font-bold text-sm transition-all text-white shrink-0 ${copied ? 'bg-emerald-600' : 'bg-brand-orange'}`}
+                      >
+                        {copied ? 'Copiado!' : 'Copiar'}
                       </button>
                     </div>
 
@@ -5964,6 +6083,38 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [profileDocument, setProfileDocument] = useState((user as any).document || '');
+  const [profileCep, setProfileCep] = useState((user as any).cep || '');
+  const [profileStreet, setProfileStreet] = useState((user as any).address_street || '');
+  const [profileNumber, setProfileNumber] = useState((user as any).address_number || '');
+  const [profileComplement, setProfileComplement] = useState((user as any).address_complement || '');
+  const [profileDistrict, setProfileDistrict] = useState((user as any).address_district || '');
+  const [profileCity, setProfileCity] = useState((user as any).address_city || '');
+  const [profileState, setProfileState] = useState((user as any).address_state || '');
+  const [loadingCep, setLoadingCep] = useState(false);
+
+  const handleCepLookup = async (cepVal: string) => {
+    const cleaned = cepVal.replace(/\D/g, '');
+    if (cleaned.length === 8) {
+      setLoadingCep(true);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleaned}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setProfileStreet(data.logradouro || '');
+          setProfileDistrict(data.bairro || '');
+          setProfileCity(data.localidade || '');
+          setProfileState(data.uf || '');
+        } else {
+          alert('CEP não encontrado.');
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+      } finally {
+        setLoadingCep(false);
+      }
+    }
+  };
 
   // States para Redes Sociais
   const [socialWhatsappGroup, setSocialWhatsappGroup] = useState(user.social_whatsapp_group || '');
@@ -6075,6 +6226,14 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
       const updates: any = {
         name: profileName,
         phone: profilePhone,
+        document: profileDocument,
+        cep: profileCep,
+        address_street: profileStreet,
+        address_number: profileNumber,
+        address_complement: profileComplement,
+        address_district: profileDistrict,
+        address_city: profileCity,
+        address_state: profileState,
         updated_at: new Date().toISOString()
       };
 
@@ -6778,6 +6937,124 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">CPF</label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-orange w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="000.000.000-00"
+                      value={profileDocument}
+                      onChange={e => {
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.length > 11) val = val.slice(0, 11);
+                        if (val.length > 9) {
+                          val = `${val.slice(0, 3)}.${val.slice(3, 6)}.${val.slice(6, 9)}-${val.slice(9)}`;
+                        } else if (val.length > 6) {
+                          val = `${val.slice(0, 3)}.${val.slice(3, 6)}.${val.slice(6)}`;
+                        } else if (val.length > 3) {
+                          val = `${val.slice(0, 3)}.${val.slice(3)}`;
+                        }
+                        setProfileDocument(val);
+                      }}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl pl-12 pr-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">CEP</label>
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-orange w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="00000-000"
+                      value={profileCep}
+                      onChange={e => {
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.length > 8) val = val.slice(0, 8);
+                        const displayVal = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                        setProfileCep(displayVal);
+                        if (val.length === 8) {
+                          handleCepLookup(val);
+                        }
+                      }}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl pl-12 pr-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                    {loadingCep && (
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                        <div className="w-5 h-5 border-2 border-brand-orange/30 border-t-brand-orange rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Endereço (Rua, Av, etc.)</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={profileStreet}
+                      onChange={e => setProfileStreet(e.target.value)}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Número</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={profileNumber}
+                      onChange={e => setProfileNumber(e.target.value)}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Complemento (Opcional)</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={profileComplement}
+                      onChange={e => setProfileComplement(e.target.value)}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Bairro</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={profileDistrict}
+                      onChange={e => setProfileDistrict(e.target.value)}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Cidade</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={profileCity}
+                      onChange={e => setProfileCity(e.target.value)}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Estado (UF)</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      maxLength={2}
+                      placeholder="SP"
+                      value={profileState}
+                      onChange={e => setProfileState(e.target.value.toUpperCase())}
+                      className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nova Senha (opcional)</label>
                   <div className="relative">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -6862,7 +7139,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                 <p className="text-zinc-400 font-medium">Configure como você deseja receber pelos títulos vendidos</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6 max-w-xl">
                 {/* PIX */}
                 <div
                   onClick={() => setSettingsTab('pix-config')}
@@ -6882,24 +7159,6 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                   </div>
                 </div>
 
-                {/* Mercado Pago */}
-                <div
-                  onClick={() => setSettingsTab('mp-config')}
-                  className="glass-card p-8 space-y-4 hover:border-blue-500 transition-all cursor-pointer group border-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="h-12 w-36 flex items-center justify-center font-black text-xl rounded-lg text-blue-500">
-                      Mercado Pago
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="p-1.5 bg-blue-50 rounded-lg text-blue-500">
-                      <CreditCard className="w-4 h-4" />
-                    </div>
-                    <p className="text-sm font-bold text-zinc-600 leading-tight">Receba automaticamente via Mercado Pago com cartão ou PIX gerado na hora.</p>
-                  </div>
-                </div>
-
               </div>
 
             </div>
@@ -6908,10 +7167,6 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
 
         if (settingsTab === 'pix-config') return (
           <PixConfigPanel user={user} onBack={() => setSettingsTab('payments')} />
-        );
-
-        if (settingsTab === 'mp-config') return (
-          <MpConfigPanel user={user} onBack={() => setSettingsTab('payments')} />
         );
 
 
