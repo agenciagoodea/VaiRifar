@@ -155,6 +155,15 @@ async function getSmtpConfig() {
 }
 
 // --- MIDDLEWARES ---
+// Cache para validação de sessões e prevenção de latência de rede no Supabase
+interface CachedAuth {
+  user: any;
+  role: string;
+  expiry: number;
+}
+const authCache = new Map<string, CachedAuth>();
+const AUTH_CACHE_TTL_MS = 60 * 1000; // 1 minuto de cache
+
 async function validateAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
     const authHeader = req.headers.authorization;
@@ -163,6 +172,18 @@ async function validateAdmin(req: express.Request, res: express.Response, next: 
     }
     const token = authHeader.split(" ")[1];
     
+    // Verificar cache em memória
+    const now = Date.now();
+    const cached = authCache.get(token);
+    if (cached && cached.expiry > now) {
+      if (cached.role === "super_admin") {
+        (req as any).user = cached.user;
+        return next();
+      } else {
+        return res.status(403).json({ success: false, message: "Acesso negado. Apenas administradores podem realizar esta ação." });
+      }
+    }
+
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       return res.status(401).json({ success: false, message: "Sessão inválida ou expirada." });
@@ -174,7 +195,18 @@ async function validateAdmin(req: express.Request, res: express.Response, next: 
       .eq("id", user.id)
       .single();
       
-    if (profileError || !profile || profile.role !== "super_admin") {
+    if (profileError || !profile) {
+      return res.status(403).json({ success: false, message: "Acesso negado. Perfil não encontrado." });
+    }
+
+    // Armazenar no cache
+    authCache.set(token, {
+      user,
+      role: profile.role,
+      expiry: now + AUTH_CACHE_TTL_MS
+    });
+      
+    if (profile.role !== "super_admin") {
       return res.status(403).json({ success: false, message: "Acesso negado. Apenas administradores podem realizar esta ação." });
     }
     
@@ -193,10 +225,33 @@ async function validateUser(req: express.Request, res: express.Response, next: e
       return res.status(401).json({ success: false, message: "Token de autorização ausente." });
     }
     const token = authHeader.split(" ")[1];
+
+    // Verificar cache em memória
+    const now = Date.now();
+    const cached = authCache.get(token);
+    if (cached && cached.expiry > now) {
+      (req as any).user = cached.user;
+      return next();
+    }
+
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       return res.status(401).json({ success: false, message: "Sessão inválida." });
     }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    // Armazenar no cache (mesmo para usuários comuns para evitar múltiplas chamadas à API de Auth)
+    authCache.set(token, {
+      user,
+      role: profile?.role || "user",
+      expiry: now + AUTH_CACHE_TTL_MS
+    });
+
     (req as any).user = user;
     next();
   } catch (error) {
@@ -771,9 +826,15 @@ export async function createApp(options: AppOptions = {}) {
             number: cpf.replace(/\D/g, '')
           }
         },
-        external_reference: campaign_id.toString(),
-        notification_url: `${appUrl}/api/webhooks/mercado-pago`
+        external_reference: campaign_id.toString()
       };
+
+      // Mercado Pago não aceita URLs de localhost/127.0.0.1 para 'notification_url'.
+      // Portanto, omitimos essa chave no ambiente local para evitar erro 400 Bad Request.
+      const isLocal = appUrl.includes("localhost") || appUrl.includes("127.0.0.1") || appUrl.includes("::1");
+      if (!isLocal) {
+        mpBody.notification_url = `${appUrl}/api/webhooks/mercado-pago`;
+      }
 
       if (payment_method === "pix") {
         mpBody.payment_method_id = "pix";

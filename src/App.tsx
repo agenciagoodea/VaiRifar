@@ -3784,6 +3784,51 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
     }
   };
 
+  const generateUniqueSlug = async (title: string, currentCampaignId?: number) => {
+    let baseSlug = title
+      .toLowerCase()
+      .normalize('NFD') // remove accents
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (!baseSlug) {
+      baseSlug = 'campanha';
+    }
+
+    let slug = baseSlug;
+    let counter = 1;
+    let isUnique = false;
+
+    while (!isUnique) {
+      const query = supabase
+        .from('campaigns')
+        .select('id')
+        .eq('slug', slug);
+      
+      if (currentCampaignId) {
+        query.neq('id', currentCampaignId);
+      }
+
+      const { data, error } = await query.maybeSingle();
+
+      if (error) {
+        break;
+      }
+
+      if (!data) {
+        isUnique = true;
+      } else {
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    }
+
+    return slug;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (step < 3) {
@@ -3797,10 +3842,13 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Você precisa estar logado para criar uma campanha. Faça login novamente.');
 
+      // Gerar slug único para evitar conflito 409
+      const resolvedSlug = await generateUniqueSlug(formData.title, initialData?.id);
+
       const payload = {
         title: formData.title,
         description: formData.description || null,
-        slug: formData.slug || formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        slug: resolvedSlug,
         image_url: formData.image_url || null,
         ticket_price: formData.ticket_price,
         total_tickets: formData.total_tickets,
@@ -7627,6 +7675,17 @@ export default function App() {
   });
   const [settingsReady, setSettingsReady] = useState(() => Boolean(readCachedSettings()));
 
+  const userRef = React.useRef<User | null>(null);
+  const pageRef = React.useRef(page);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
   const fetchSettings = async () => {
     try {
       const { data: settingsRows, error } = await supabase
@@ -7651,32 +7710,36 @@ export default function App() {
   useEffect(() => {
     // 1. Tentar restaurar do cache local imediatamente para "perceived performance"
     // 2. Ouvir mudanças de autenticação em tempo real
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth Change:', event);
-      if (session?.user) {
-        // Se já temos o cache e o ID bate, não precisamos buscar perfil de novo 
-        // a menos que seja uma mudança de estado crítica (como SIGNED_IN)
-        if (user?.id === session.user.id && event !== 'SIGNED_IN') {
-           return;
-        }
+      setTimeout(async () => {
+        if (session?.user) {
+          const currentUser = userRef.current;
+          // Se já temos o cache e o ID bate, não precisamos buscar perfil de novo 
+          // a menos que seja uma mudança de estado crítica (como SIGNED_IN)
+          if (currentUser?.id === session.user.id && event !== 'SIGNED_IN') {
+             return;
+          }
 
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
 
-        if (profile) {
-          const userData = mapProfileToUser(profile, session.user.email || '');
-          setUser(userData);
-          localStorage.setItem('rifapro-user', JSON.stringify(userData));
-          if (page === 'login' || page === 'home') setPage('dashboard');
+          if (profile) {
+            const userData = mapProfileToUser(profile, session.user.email || '');
+            setUser(userData);
+            localStorage.setItem('rifapro-user', JSON.stringify(userData));
+            const currentPage = pageRef.current;
+            if (currentPage === 'login' || currentPage === 'home') setPage('dashboard');
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          localStorage.removeItem('rifapro-user');
+          setPage('home');
         }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        localStorage.removeItem('rifapro-user');
-        setPage('home');
-      }
+      }, 0);
     });
 
     const init = async () => {
