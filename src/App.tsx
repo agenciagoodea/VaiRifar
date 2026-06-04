@@ -1265,7 +1265,7 @@ const Sidebar = ({ activeTab, onNavigate, onLogout, user, globalSettings }: { ac
 
   const menuItems = user.role === 'super_admin' ? adminItems : organizerItems;
   const logoUrl = globalSettings?.site_logo_url || globalSettings?.logo_url;
-  const siteName = globalSettings?.site_name || 'Vai Rifar?';
+  const sidebarBrandName = 'Vai Rifar?';
 
   return (
     <div className="w-72 bg-white border-r border-zinc-100 h-screen sticky top-0 flex flex-col p-6">
@@ -1276,13 +1276,13 @@ const Sidebar = ({ activeTab, onNavigate, onLogout, user, globalSettings }: { ac
         aria-label="Ir para a home publica"
       >
         {logoUrl ? (
-          <img src={logoUrl} alt={siteName} className="h-14 max-w-[190px] w-auto object-contain" />
+          <img src={logoUrl} alt={sidebarBrandName} className="h-14 max-w-[190px] w-auto object-contain" />
         ) : (
           <>
             <div className="bg-brand-green p-1.5 rounded-lg shrink-0">
               <Ticket className="text-white w-5 h-5" />
             </div>
-            <span className="text-xl font-black tracking-tight text-zinc-900">{siteName}</span>
+            <span className="text-xl font-black tracking-tight text-zinc-900">{sidebarBrandName}</span>
           </>
         )}
       </button>
@@ -7477,16 +7477,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (settings.primary_color) {
-      document.documentElement.style.setProperty('--brand-orange', settings.primary_color);
-      document.documentElement.style.setProperty('--color-primary', settings.primary_color);
-    }
-    if (settings.secondary_color) {
-      document.documentElement.style.setProperty('--color-secondary', settings.secondary_color);
-    }
-    if (settings.button_color) {
-      document.documentElement.style.setProperty('--color-button', settings.button_color);
-    }
+    const primaryColor = settings.primary_color || '#00d18e';
+    const secondaryColor = settings.secondary_color || '#ff6321';
+    const buttonColor = settings.button_color || secondaryColor;
+
+    document.documentElement.style.setProperty('--color-brand-green', primaryColor);
+    document.documentElement.style.setProperty('--color-brand-orange', buttonColor);
+    document.documentElement.style.setProperty('--color-primary', primaryColor);
+    document.documentElement.style.setProperty('--color-secondary', secondaryColor);
+    document.documentElement.style.setProperty('--color-button', buttonColor);
+
     if (settings.site_theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
