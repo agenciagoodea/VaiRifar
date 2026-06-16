@@ -7361,7 +7361,15 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                 </div>
               )}
 
-              {settingsSubTab !== 'mercadopago' && (
+              {settingsSubTab === 'seo' && (
+                <SeoSettingsPanel 
+                  globalSettings={globalSettings} 
+                  onRefreshSettings={onRefreshSettings} 
+                  user={user} 
+                />
+              )}
+
+              {settingsSubTab !== 'mercadopago' && settingsSubTab !== 'seo' && (
                 <div className="flex justify-end p-2">
                   <button
                     type="button"
