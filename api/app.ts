@@ -1322,6 +1322,150 @@ export async function createApp(options: AppOptions = {}) {
     }
   });
 
+  // --- LGPD ROUTES ---
+
+  // 1. Register user consent (IP, Date, Time, User Agent, Version)
+  app.post("/api/lgpd/consent", async (req, res) => {
+    try {
+      const { user_id, consent_type, version, accepted } = req.body;
+      const ip_address = (req.headers['x-forwarded-for'] as string || req.ip || req.socket.remoteAddress || '').split(',')[0].trim();
+      const user_agent = req.headers['user-agent'] || '';
+
+      const { error } = await supabase
+        .from("user_consents")
+        .insert([{
+          user_id: user_id || null,
+          consent_type,
+          version,
+          accepted: Boolean(accepted),
+          ip_address,
+          user_agent,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      res.json({ success: true, message: "Consentimento registrado com sucesso." });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // 2. Submit LGPD Request (Access, Correction, Deletion, Revocation)
+  app.post("/api/lgpd/request", async (req, res) => {
+    try {
+      const { name, email, request_type, details } = req.body;
+
+      if (!name || !email || !request_type) {
+        return res.status(400).json({ success: false, message: "Campos obrigatórios ausentes." });
+      }
+
+      const { error } = await supabase
+        .from("lgpd_requests")
+        .insert([{
+          name,
+          email,
+          request_type,
+          details: details || "",
+          status: "pending",
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      // Registrar log da solicitação
+      const ip_address = (req.headers['x-forwarded-for'] as string || req.ip || req.socket.remoteAddress || '').split(',')[0].trim();
+      const user_agent = req.headers['user-agent'] || '';
+      await supabase.from("lgpd_logs").insert([{
+        action: `request_${request_type}`,
+        details: `Solicitação de ${request_type} registrada para o e-mail ${email}.`,
+        ip_address,
+        user_agent,
+        created_at: new Date().toISOString()
+      }]);
+
+      res.json({ success: true, message: "Solicitação LGPD registrada com sucesso." });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // 3. Excluir Minha Conta (Anonymize & Delete)
+  app.post("/api/users/delete-me", validateUser, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user?.id) {
+        return res.status(401).json({ success: false, message: "Não autorizado." });
+      }
+
+      const userId = user.id;
+      const email = user.email;
+      const ip_address = (req.headers['x-forwarded-for'] as string || req.ip || req.socket.remoteAddress || '').split(',')[0].trim();
+      const user_agent = req.headers['user-agent'] || '';
+
+      // 1. Anonimizar perfil do usuário
+      const anonymizedEmail = `anon-${userId.substring(0, 8)}@vairifar.com.br`;
+      const anonymizedProfile = {
+        name: "Usuário Anonimizado LGPD",
+        email: anonymizedEmail,
+        phone: "",
+        document: "",
+        cep: "",
+        address_street: "",
+        address_number: "",
+        address_complement: "",
+        address_district: "",
+        address_city: "",
+        address_state: "",
+        logo_url: "",
+        social_whatsapp_group: "",
+        social_telegram: "",
+        social_instagram: "",
+        social_tiktok: "",
+        social_youtube: "",
+        social_facebook: "",
+        pixel_facebook: "",
+        pixel_google: ""
+      };
+
+      const { error: profileErr } = await supabase
+        .from("profiles")
+        .update(anonymizedProfile)
+        .eq("id", userId);
+
+      if (profileErr) {
+        console.error("Erro ao anonimizar perfil:", profileErr);
+        return res.status(500).json({ success: false, message: "Erro ao anonimizar os dados pessoais." });
+      }
+
+      // 2. Registrar log da exclusão
+      await supabase.from("lgpd_logs").insert([{
+        user_id: userId,
+        action: "delete_account",
+        details: `Conta ${email} excluída e dados pessoais anonimizados.`,
+        ip_address,
+        user_agent,
+        created_at: new Date().toISOString()
+      }]);
+
+      // 3. Excluir login do Supabase Auth (se Service Role Key estiver configurado)
+      if (hasServiceRoleKey) {
+        const { error: authErr } = await supabase.auth.admin.deleteUser(userId);
+        if (authErr) {
+          console.error("Erro ao deletar login do auth.users:", authErr);
+        }
+      }
+
+      res.json({ success: true, message: "Sua conta foi excluída e seus dados foram anonimizados com sucesso." });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   // Catch-all for API routes to prevent HTML fallback
   app.use("/api", (req, res) => {
     console.log(`API 404: ${req.method} ${req.url}`);

@@ -95,6 +95,38 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
+const loadAnalyticsAndPixels = (consent: any, settings: any) => {
+  if (!consent || !settings) return;
+  if (consent.statistics && settings.google_analytics_id && !(window as any).__gaLoaded) {
+    const script = document.createElement('script');
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${settings.google_analytics_id}`;
+    script.async = true;
+    document.head.appendChild(script);
+    
+    const script2 = document.createElement('script');
+    script2.textContent = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${settings.google_analytics_id}');`;
+    document.head.appendChild(script2);
+    (window as any).__gaLoaded = true;
+  }
+  if (consent.marketing && settings.facebook_pixel_id && !(window as any).__fbPixelLoaded) {
+    const fbScript = document.createElement('script');
+    fbScript.textContent = `
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '${settings.facebook_pixel_id}');
+      fbq('track', 'PageView');
+    `;
+    document.head.appendChild(fbScript);
+    (window as any).__fbPixelLoaded = true;
+  }
+};
+
 const formatCpf = (val: string) => {
   const digits = val.replace(/\D/g, '').substring(0, 11);
   if (digits.length > 9) {
@@ -1430,7 +1462,7 @@ const Navbar = ({ user, onLogout, onNavigate, settings }: { user: User | null, o
   );
 };
 
-const Sidebar = ({ activeTab, onNavigate, onLogout, user, globalSettings }: { activeTab: string, onNavigate: (tab: string) => void, onLogout: () => void, user: User, globalSettings: any }) => {
+const Sidebar = ({ activeTab, onNavigate, onLogout, user, globalSettings, onNavigateRoot }: { activeTab: string, onNavigate: (tab: string) => void, onLogout: () => void, user: User, globalSettings: any, onNavigateRoot?: (page: string) => void }) => {
   const organizerItems = [
     { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
     { id: 'my-campaigns', label: 'Minhas campanhas', icon: Ticket },
@@ -1505,6 +1537,16 @@ const Sidebar = ({ activeTab, onNavigate, onLogout, user, globalSettings }: { ac
         <button onClick={onLogout} className="w-full py-2 text-xs font-bold text-red-500 hover:bg-red-50 uppercase tracking-widest rounded-xl transition-all">
           Sair da conta
         </button>
+      </div>
+
+      <div className="pt-4 mt-auto border-t border-zinc-100 text-[10px] text-zinc-400 flex flex-wrap gap-x-2 gap-y-1 justify-center shrink-0">
+        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRoot?.('terms-of-use'); }} className="hover:text-zinc-600 transition-colors">Termos</a>
+        <span>•</span>
+        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRoot?.('privacy-policy'); }} className="hover:text-zinc-600 transition-colors">Privacidade</a>
+        <span>•</span>
+        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRoot?.('cookies-policy'); }} className="hover:text-zinc-600 transition-colors">Cookies</a>
+        <span>•</span>
+        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRoot?.('lgpd-form'); }} className="hover:text-zinc-600 transition-colors">LGPD</a>
       </div>
     </div>
   );
@@ -5303,7 +5345,7 @@ const MercadoPagoSettingsPanel = () => {
   );
 };
 
-const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout }: { user: User, globalSettings: any, onRefreshSettings: () => void | Promise<any>, onLogout: () => void }) => {
+const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout, onNavigateRoot }: { user: User, globalSettings: any, onRefreshSettings: () => void | Promise<any>, onLogout: () => void, onNavigateRoot?: (page: string) => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'settings'>('stats');
@@ -5926,6 +5968,7 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
         onLogout={onLogout}
         user={user}
         globalSettings={globalSettings}
+        onNavigateRoot={onNavigateRoot}
       />
       <main className="flex-1 p-12 overflow-y-auto">
         <AnimatePresence mode="wait">
@@ -6070,7 +6113,7 @@ const TaxTableEditor = ({ value, onChange }: { value: string, onChange: (v: stri
   );
 };
 
-const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, onLogout }: { user: User, onSelectCampaign: (c: Campaign) => void, globalSettings: any, onRefreshSettings: () => void, onLogout: () => void }) => {
+const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, onLogout, onNavigateRoot }: { user: User, onSelectCampaign: (c: Campaign) => void, globalSettings: any, onRefreshSettings: () => void, onLogout: () => void, onNavigateRoot?: (page: string) => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -6213,13 +6256,26 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const handleDeleteAccount = async () => {
     if (!confirm('Deseja realmente excluir sua conta? Esta ação é permanente e removerá todos os seus dados e campanhas!')) return;
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', user.id);
-      
-      if (error) throw error;
-      alert('Sua conta foi excluída com sucesso.');
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
+      const response = await fetch('/api/users/delete-me', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Erro ao excluir conta.');
+      }
+
+      alert('Sua conta foi excluída com sucesso e seus dados pessoais foram anonimizados conforme a LGPD.');
       onLogout();
     } catch (err: any) {
       alert('Erro ao excluir conta: ' + err.message);
@@ -7569,6 +7625,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
         onLogout={onLogout}
         user={user}
         globalSettings={globalSettings}
+        onNavigateRoot={onNavigateRoot}
       />
       <main className="flex-1 p-12 overflow-y-auto">
         {renderContent()}
@@ -7860,18 +7917,25 @@ const ResetPasswordPage = ({ onResetComplete }: { onResetComplete: () => void })
   );
 };
 
-const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
+const LoginPage = ({ onLogin, onNavigate }: { onLogin: (u: User) => void, onNavigate?: (page: string) => void }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (mode === 'register') {
+        if (!acceptTerms || !acceptPrivacy) {
+          alert('Você precisa aceitar os Termos de Uso e a Política de Privacidade para prosseguir.');
+          setLoading(false);
+          return;
+        }
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -7879,6 +7943,33 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
         });
         if (error) throw error;
         if (data.user) {
+          try {
+            await Promise.all([
+              fetch('/api/lgpd/consent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  user_id: data.user.id,
+                  consent_type: 'terms_of_use',
+                  version: '1.0.0',
+                  accepted: true
+                })
+              }),
+              fetch('/api/lgpd/consent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  user_id: data.user.id,
+                  consent_type: 'privacy_policy',
+                  version: '1.0.0',
+                  accepted: true
+                })
+              })
+            ]);
+          } catch (errConsent) {
+            console.error('Erro ao registrar consentimento LGPD no cadastro:', errConsent);
+          }
+
           onLogin({
             id: data.user.id,
             name: name,
@@ -7991,6 +8082,50 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
               />
             </div>
           )}
+
+          {mode === 'register' && (
+            <div className="space-y-3 pt-2 text-left">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  className="mt-1 accent-emerald-600 rounded border-zinc-300"
+                  checked={acceptTerms}
+                  onChange={e => setAcceptTerms(e.target.checked)}
+                />
+                <span className="text-xs text-zinc-500 font-medium leading-relaxed">
+                  Li e concordo com os{' '}
+                  <a
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); onNavigate?.('terms-of-use'); }}
+                    className="text-emerald-600 font-bold hover:underline"
+                  >
+                    Termos de Uso
+                  </a>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  className="mt-1 accent-emerald-600 rounded border-zinc-300"
+                  checked={acceptPrivacy}
+                  onChange={e => setAcceptPrivacy(e.target.checked)}
+                />
+                <span className="text-xs text-zinc-500 font-medium leading-relaxed">
+                  Li e concordo com a{' '}
+                  <a
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); onNavigate?.('privacy-policy'); }}
+                    className="text-emerald-600 font-bold hover:underline"
+                  >
+                    Política de Privacidade
+                  </a>
+                </span>
+              </label>
+            </div>
+          )}
+
           <button
             disabled={loading}
             className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
@@ -8025,6 +8160,478 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
   );
 };
 
+const CookieConsentBanner = ({
+  onAcceptAll,
+  onRejectOptional,
+  onCustomize
+}: {
+  onAcceptAll: () => void;
+  onRejectOptional: () => void;
+  onCustomize: () => void;
+}) => {
+  return (
+    <motion.div
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 100, opacity: 0 }}
+      className="fixed bottom-6 left-6 right-6 z-50 max-w-5xl mx-auto bg-white/95 backdrop-blur-lg border border-zinc-200/80 p-6 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex flex-col md:flex-row items-center justify-between gap-6 font-sans"
+    >
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 text-emerald-600">
+          <Shield className="w-6 h-6" />
+        </div>
+        <div className="space-y-1 text-left">
+          <h4 className="text-base font-black text-zinc-900 leading-snug">Sua privacidade importa</h4>
+          <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+            Utilizamos cookies para melhorar a sua experiência no nosso site. Cookies necessários garantem o funcionamento correto. Cookies de estatísticas, marketing e personalização nos ajudam a entender como você interage com o site. Você pode aceitar todos, recusar opcionais ou personalizar suas opções.
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto shrink-0">
+        <button
+          onClick={onCustomize}
+          className="flex-1 sm:flex-initial text-xs font-bold text-zinc-600 hover:text-zinc-900 border border-zinc-200 px-5 py-3.5 rounded-2xl hover:bg-zinc-50 transition-all uppercase tracking-widest whitespace-nowrap"
+        >
+          Personalizar
+        </button>
+        <button
+          onClick={onRejectOptional}
+          className="flex-1 sm:flex-initial text-xs font-bold text-zinc-500 hover:text-zinc-700 px-5 py-3.5 rounded-2xl hover:bg-zinc-100 transition-all uppercase tracking-widest whitespace-nowrap"
+        >
+          Recusar Opcionais
+        </button>
+        <button
+          onClick={onAcceptAll}
+          className="flex-1 sm:flex-initial text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-emerald-100 uppercase tracking-widest whitespace-nowrap"
+        >
+          Aceitar Todos
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+const CookiePreferencesModal = ({
+  onClose,
+  onSave,
+  initialPreferences
+}: {
+  onClose: () => void;
+  onSave: (preferences: any) => void;
+  initialPreferences: any;
+}) => {
+  const [stats, setStats] = useState(initialPreferences?.statistics ?? false);
+  const [marketing, setMarketing] = useState(initialPreferences?.marketing ?? false);
+  const [personalization, setPersonalization] = useState(initialPreferences?.personalization ?? false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative bg-white w-full max-w-xl rounded-3xl border border-zinc-100 shadow-2xl p-6 sm:p-8 flex flex-col max-h-[90vh] overflow-hidden font-sans"
+      >
+        <div className="flex items-center justify-between border-b border-zinc-100 pb-5 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+              <SettingsIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-zinc-900 leading-none">Preferências de Cookies</h3>
+              <p className="text-xs text-zinc-400 font-medium mt-1">Personalize o uso dos cookies do site</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 text-zinc-400 hover:bg-zinc-50 rounded-xl transition-all">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-6 pr-2 mb-6">
+          <div className="flex items-start justify-between gap-4 p-4 bg-zinc-50 border border-zinc-100 rounded-2xl">
+            <div className="space-y-1 text-left">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-zinc-900">Necessários</h4>
+                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full uppercase">Obrigatório</span>
+              </div>
+              <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+                Essenciais para o funcionamento básico e segurança do site. Não podem ser desativados.
+              </p>
+            </div>
+            <div className="relative cursor-not-allowed opacity-60">
+              <div className="w-12 h-6 rounded-full bg-emerald-600 relative">
+                <div className="absolute top-1 right-1 w-4 h-4 bg-white rounded-full shadow-sm" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 p-4 border border-zinc-100 rounded-2xl hover:bg-zinc-50/50 transition-all">
+            <div className="space-y-1 text-left">
+              <h4 className="text-sm font-bold text-zinc-900">Estatísticas</h4>
+              <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+                Coletam dados anônimos para entendermos como o site está sendo utilizado (ex: páginas mais acessadas) e identificarmos pontos de melhoria.
+              </p>
+            </div>
+            <div
+              onClick={() => setStats(!stats)}
+              className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${stats ? 'bg-emerald-600' : 'bg-zinc-200'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${stats ? 'right-1' : 'left-1'}`} />
+            </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 p-4 border border-zinc-100 rounded-2xl hover:bg-zinc-50/50 transition-all">
+            <div className="space-y-1 text-left">
+              <h4 className="text-sm font-bold text-zinc-900">Marketing</h4>
+              <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+                Usados para veicular anúncios e campanhas mais relevantes para você de acordo com o seu perfil de navegação.
+              </p>
+            </div>
+            <div
+              onClick={() => setMarketing(!marketing)}
+              className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${marketing ? 'bg-emerald-600' : 'bg-zinc-200'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${marketing ? 'right-1' : 'left-1'}`} />
+            </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 p-4 border border-zinc-100 rounded-2xl hover:bg-zinc-50/50 transition-all">
+            <div className="space-y-1 text-left">
+              <h4 className="text-sm font-bold text-zinc-900">Personalização</h4>
+              <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+                Permitem que o site lembre de suas escolhas e preferências de navegação (como temas e visualizações).
+              </p>
+            </div>
+            <div
+              onClick={() => setPersonalization(!personalization)}
+              className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${personalization ? 'bg-emerald-600' : 'bg-zinc-200'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${personalization ? 'right-1' : 'left-1'}`} />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-zinc-100 pt-5 w-full shrink-0">
+          <button
+            onClick={onClose}
+            className="flex-1 text-xs font-bold text-zinc-500 hover:text-zinc-700 border border-zinc-200 py-3.5 rounded-2xl hover:bg-zinc-50 transition-all uppercase tracking-widest"
+          >
+            Voltar
+          </button>
+          <button
+            onClick={() => onSave({ necessary: true, statistics: stats, marketing: marketing, personalization: personalization })}
+            className="flex-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 py-3.5 rounded-2xl transition-all shadow-lg shadow-emerald-100 uppercase tracking-widest"
+          >
+            Salvar Preferências
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const LGPDPolicyPage = ({ page, onNavigate, settings }: { page: string, onNavigate: (page: string) => void, settings: any }) => {
+  const getPageInfo = () => {
+    switch (page) {
+      case 'terms-of-use':
+        return {
+          title: 'Termos de Uso',
+          subtitle: 'Termos e Condições Gerais de Uso da Plataforma',
+          version: 'Versão 1.0.0 (Atualizado em Junho de 2026)',
+          content: `
+### 1. Aceitação dos Termos
+Ao acessar e utilizar a plataforma Vai Rifar, você declara ter pelo menos 18 anos de idade e concorda expressamente com as disposições contidas nestes Termos de Uso. Se você não concorda com qualquer parte destes termos, não deve utilizar nossos serviços.
+
+### 2. Natureza da Plataforma
+O Vai Rifar é uma plataforma SaaS (Software as a Service) que fornece ferramentas tecnológicas para criação, gerenciamento e divulgação de campanhas de sorteios online por organizadores independentes. O Vai Rifar não é organizador, intermediário ou promotor de nenhuma campanha. A responsabilidade por toda e qualquer campanha cadastrada, sua legalidade, prestação de contas, entrega de prêmios e conformidade com as legislações vigentes recai exclusivamente sobre o organizador criador da campanha.
+
+### 3. Cadastro do Organizador
+Para criar campanhas, o organizador deve realizar um cadastro fornecendo dados completos e verdadeiros (Nome, CPF, E-mail, Celular e Endereço). O organizador é responsável por manter a confidencialidade de sua senha e por todas as atividades que ocorram sob sua conta.
+
+### 4. Responsabilidades do Organizador
+- Garantir que as campanhas criadas estejam em conformidade com as leis locais brasileiras relativas à distribuição de prêmios e sorteios.
+- Realizar a entrega dos prêmios descritos de forma idônea aos vencedores.
+- Tratar os dados dos apoiadores/compradores com total sigilo e em estrita conformidade com a LGPD.
+- Não utilizar a plataforma para sorteios enganosos, ilegais ou abusivos.
+
+### 5. Responsabilidades do Apoiador/Comprador
+- Fornecer informações corretas (Nome, E-mail e WhatsApp) ao reservar números em campanhas.
+- Realizar o pagamento diretamente ao organizador da campanha conforme os dados informados.
+- Compreender que qualquer reclamação sobre a entrega do prêmio ou o sorteio deve ser direcionada unicamente ao organizador responsável.
+
+### 6. Limitação de Responsabilidade
+O Vai Rifar não se responsabiliza por perdas financeiras, danos morais, cancelamentos, descumprimento de entrega de prêmios ou desvios de conduta de qualquer organizador ou participante. A plataforma apenas fornece o meio tecnológico de gerenciamento.
+
+### 7. Versionamento e Atualizações
+Estes termos podem ser atualizados periodicamente para refletir mudanças legislativas ou melhorias na plataforma. A versão atualizada entrará em vigor imediatamente após sua publicação no site.
+          `
+        };
+      case 'cookies-policy':
+        return {
+          title: 'Política de Cookies',
+          subtitle: 'Transparência sobre o uso de cookies em nossa plataforma',
+          version: 'Versão 1.0.0 (Atualizado em Junho de 2026)',
+          content: `
+### 1. O que são Cookies?
+Cookies são pequenos arquivos de texto enviados e armazenados no seu navegador de internet quando você visita sites. Eles servem para lembrar de suas ações, preferências e configurações, de modo a proporcionar uma experiência de navegação mais rápida, segura e personalizada.
+
+### 2. Como Utilizamos Cookies?
+A plataforma Vai Rifar utiliza cookies de diferentes categorias. Você tem total controle sobre os cookies não essenciais e pode alterar seus consentimentos a qualquer momento em nosso Banner ou na Central de Preferências.
+
+### 3. Categorias de Cookies Utilizados
+- **Cookies Necessários (Essenciais):** São imprescindíveis para a navegação básica, segurança e login seguro na plataforma. Sem eles, o site não funcionaria corretamente.
+- **Cookies de Estatísticas (Analíticos):** Ajudam-nos a coletar dados anônimos sobre como as páginas do site são acessadas. Usamos o Google Analytics para identificar fluxos de navegação e melhorar o desempenho técnico do sistema.
+- **Cookies de Marketing:** Permitem o carregamento de scripts para rastreamento de conversões (como o Facebook Pixel) com o objetivo de otimizar campanhas de atração de novos usuários.
+- **Cookies de Personalização:** Permitem que o sistema salve configurações visuais e preferências escolhidas por você (como o tema escuro/claro e layouts personalizados).
+
+### 4. Gerenciamento e Controle de Cookies
+Você pode revogar ou ajustar seu consentimento a qualquer momento no nosso site acessando a nossa Central de Preferências (clicando em "Política de Cookies" ou no link respectivo no rodapé). Alternativamente, você pode bloquear ou limpar os cookies diretamente nas configurações do seu navegador de internet.
+
+### 5. Cookies de Terceiros
+Eventualmente, provedores de serviços terceiros (como Mercado Pago para transações financeiras e Supabase para autenticação) podem instalar cookies essenciais adicionais para concluir ações solicitadas por você (como login ou pagamento).
+          `
+        };
+      case 'privacy-policy':
+      default:
+        return {
+          title: 'Política de Privacidade',
+          subtitle: 'Como protegemos seus dados pessoais de acordo com a LGPD',
+          version: 'Versão 1.0.0 (Atualizado em Junho de 2026)',
+          content: `
+### 1. Compromisso com a Privacidade
+A privacidade dos seus dados pessoais é uma prioridade absoluta para o Vai Rifar. Esta Política de Privacidade descreve de forma clara e objetiva como coletamos, tratamos, armazenamos e protegemos os seus dados, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD).
+
+### 2. Dados Coletados
+- **Para Organizadores:** Coletamos dados cadastrais completos necessários para faturamento e integridade da plataforma (Nome, CPF, E-mail, Celular, Endereço completo e informações de customização do painel).
+- **Para Apoiadores/Compradores:** Coletamos dados essenciais fornecidos por você ao reservar quotas (Nome, E-mail e Celular).
+- **Dados Técnicos (Navegação):** Registramos o seu endereço IP, data/hora dos consentimentos, navegador e informações básicas do dispositivo para auditorias e segurança.
+
+### 3. Finalidades do Tratamento
+Tratamos os dados para:
+- Viabilizar a criação e o controle das campanhas de sorteios.
+- Permitir que os organizadores entrem em contato com os ganhadores e apoiadores.
+- Processar transações e integrações de pagamento de forma segura.
+- Atender a obrigações legais de auditoria e registro de logs de consentimento previstos na LGPD.
+- Aperfeiçoar o design e as funcionalidades da plataforma.
+
+### 4. Compartilhamento de Dados
+Os seus dados pessoais **nunca** serão vendidos ou comercializados. O compartilhamento ocorre estritamente nas seguintes situações:
+- Com os organizadores das campanhas nas quais você participa, para viabilizar a identificação e entrega de prêmios.
+- Com prestadores de serviço necessários para a operação (ex: gateways de pagamento e provedor de autenticação Supabase).
+- Mediante obrigação legal ou ordem judicial de autoridade competente.
+
+### 5. Seus Direitos sob a LGPD
+Como titular dos dados, você pode exercer a qualquer momento seus direitos através do nosso **Canal LGPD** (?page=lgpd), solicitando:
+- Confirmação da existência de tratamento e acesso aos dados.
+- Correção de dados incompletos ou inexatos.
+- Exclusão e anonimização de sua conta e dados pessoais.
+- Revogação de consentimentos concedidos anteriormente.
+
+### 6. Armazenamento e Segurança
+Os dados são armazenados em servidores de nuvem altamente seguros fornecidos pelo Supabase, com criptografia em trânsito e em repouso. Implementamos rígidos controles de segurança contra acessos não autorizados.
+
+### 7. Alterações nesta Política
+Esta política pode ser atualizada periodicamente. Sempre que houver uma alteração significativa, a data da versão no topo do documento será atualizada.
+          `
+        };
+    }
+  };
+
+  const info = getPageInfo();
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-16 font-sans text-left">
+      <div className="bg-white rounded-3xl border border-zinc-100 p-8 sm:p-12 shadow-2xl space-y-8">
+        <div className="border-b border-zinc-100 pb-8 text-center space-y-3">
+          <button onClick={() => onNavigate('home')} className="inline-flex items-center gap-2 text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-all uppercase tracking-widest mb-4">
+            Voltar para a Home
+          </button>
+          <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 leading-tight">{info.title}</h1>
+          <p className="text-sm text-zinc-500 font-medium">{info.subtitle}</p>
+          <span className="inline-block text-[11px] font-bold text-zinc-400 bg-zinc-50 px-3 py-1 rounded-full uppercase tracking-wider mt-4">
+            {info.version}
+          </span>
+        </div>
+
+        <div className="prose max-w-none">
+          {info.content.split('\n\n').map((para, i) => {
+            const trimmed = para.trim();
+            if (!trimmed) return null;
+            if (trimmed.startsWith('###')) {
+              return <h3 key={i} className="text-lg font-black text-zinc-900 mt-8 mb-4">{trimmed.replace('###', '').trim()}</h3>;
+            }
+            if (trimmed.startsWith('-')) {
+              return (
+                <ul key={i} className="list-disc pl-6 space-y-2 text-sm text-zinc-600 font-medium mb-4">
+                  {trimmed.split('\n').map((li, idx) => (
+                    <li key={idx}>{li.replace(/^-/, '').trim()}</li>
+                  ))}
+                </ul>
+              );
+            }
+            return <p key={i} className="text-sm text-zinc-600 font-medium leading-relaxed mb-4">{trimmed}</p>;
+          })}
+        </div>
+
+        <div className="border-t border-zinc-100 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-xs text-zinc-400 font-medium text-center sm:text-left">
+            Dúvidas sobre nossas políticas? Entre em contato pelo nosso Canal LGPD.
+          </p>
+          <button
+            onClick={() => onNavigate('lgpd-form')}
+            className="w-full sm:w-auto bg-emerald-600 text-white px-6 py-3.5 rounded-2xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 uppercase tracking-widest text-center animate-pulse"
+          >
+            Falar no Canal LGPD
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LGPDFormPage = ({ onNavigate, settings }: { onNavigate: (page: string) => void, settings: any }) => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [requestType, setRequestType] = useState('access');
+  const [details, setDetails] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch('/api/lgpd/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          email,
+          request_type: requestType,
+          details
+        })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Erro ao registrar solicitação.');
+      }
+      setSuccess(true);
+      setName('');
+      setEmail('');
+      setDetails('');
+    } catch (err: any) {
+      alert(err.message || 'Houve um erro ao enviar sua solicitação. Tente novamente mais tarde.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-16 font-sans">
+      <div className="bg-white rounded-3xl border border-zinc-100 p-8 sm:p-12 shadow-2xl space-y-8">
+        <div className="text-center space-y-3">
+          <button onClick={() => onNavigate('home')} className="inline-flex items-center gap-2 text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-all uppercase tracking-widest mb-4">
+            Voltar para a Home
+          </button>
+          <h1 className="text-3xl font-black text-zinc-900 leading-tight">Canal LGPD</h1>
+          <p className="text-sm text-zinc-500 font-medium">
+            Exerça seus direitos de privacidade de forma rápida e segura.
+          </p>
+        </div>
+
+        {success ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-emerald-50 border border-emerald-100 rounded-3xl p-8 text-center space-y-4"
+          >
+            <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center mx-auto text-white shadow-lg shadow-emerald-100">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-zinc-900">Solicitação Enviada!</h3>
+            <p className="text-sm text-zinc-600 font-medium leading-relaxed text-left">
+              Recebemos seu pedido de privacidade. Conforme previsto em lei, analisaremos sua solicitação e responderemos no e-mail informado em até 15 dias.
+            </p>
+            <button
+              onClick={() => setSuccess(false)}
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-widest inline-block pt-2"
+            >
+              Fazer outra solicitação
+            </button>
+          </motion.div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block text-left">Nome Completo</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Maria Silva"
+                className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block text-left">Endereço de E-mail</label>
+              <input
+                type="email"
+                required
+                placeholder="maria@exemplo.com"
+                className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block text-left">Tipo de Solicitação</label>
+              <select
+                className="w-full h-14 bg-zinc-50 border border-zinc-100 rounded-2xl px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-700"
+                value={requestType}
+                onChange={e => setRequestType(e.target.value)}
+              >
+                <option value="access">Solicitar acesso completo aos meus dados</option>
+                <option value="correction">Solicitar correção de dados inexatos/incompletos</option>
+                <option value="deletion">Solicitar exclusão da minha conta e anonimização de dados</option>
+                <option value="revocation">Revogar consentimentos concedidos anteriormente</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block text-left">Detalhes adicionais (opcional)</label>
+              <textarea
+                rows={4}
+                placeholder="Descreva detalhadamente sua solicitação para agilizar o atendimento..."
+                className="w-full p-4 bg-zinc-50 border border-zinc-100 rounded-2xl font-medium outline-none focus:ring-2 focus:ring-emerald-500 text-sm resize-none"
+                value={details}
+                onChange={e => setDetails(e.target.value)}
+              />
+            </div>
+
+            <button
+              disabled={loading}
+              className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-60 flex items-center justify-center gap-2 uppercase tracking-widest text-sm"
+            >
+              {loading && <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              Enviar Solicitação
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -8032,6 +8639,22 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  
+  const [cookieConsent, setCookieConsent] = useState<{
+    necessary: boolean;
+    statistics: boolean;
+    marketing: boolean;
+    personalization: boolean;
+  } | null>(() => {
+    try {
+      const cached = localStorage.getItem('vairifar-cookie-consent');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [showCookieBanner, setShowCookieBanner] = useState(cookieConsent === null);
+  const [showCookiePreferences, setShowCookiePreferences] = useState(false);
   const [settings, setSettings] = useState<any>(() => {
     const cached = readCachedSettings();
     if (cached) {
@@ -8091,6 +8714,22 @@ export default function App() {
       if (window.location.search || window.location.pathname !== '/') {
         window.history.pushState({ page }, '', window.location.origin + '/');
       }
+    } else if (page === 'privacy-policy') {
+      if (window.location.search !== '?page=politica-de-privacidade') {
+        window.history.pushState({ page }, '', window.location.origin + '/?page=politica-de-privacidade');
+      }
+    } else if (page === 'terms-of-use') {
+      if (window.location.search !== '?page=termos-de-uso') {
+        window.history.pushState({ page }, '', window.location.origin + '/?page=termos-de-uso');
+      }
+    } else if (page === 'cookies-policy') {
+      if (window.location.search !== '?page=politica-de-cookies') {
+        window.history.pushState({ page }, '', window.location.origin + '/?page=politica-de-cookies');
+      }
+    } else if (page === 'lgpd-form') {
+      if (window.location.search !== '?page=lgpd') {
+        window.history.pushState({ page }, '', window.location.origin + '/?page=lgpd');
+      }
     }
   }, [page, selectedCampaign]);
 
@@ -8114,6 +8753,8 @@ export default function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const rifaParam = urlParams.get('rifa');
         const recoveryParam = urlParams.get('recovery');
+        const pageParam = urlParams.get('page');
+        
         if (recoveryParam) {
           setPage('reset-password');
           return;
@@ -8126,6 +8767,11 @@ export default function App() {
             return;
           }
         }
+        if (pageParam === 'politica-de-privacidade') { setPage('privacy-policy'); return; }
+        if (pageParam === 'termos-de-uso') { setPage('terms-of-use'); return; }
+        if (pageParam === 'politica-de-cookies') { setPage('cookies-policy'); return; }
+        if (pageParam === 'lgpd') { setPage('lgpd-form'); return; }
+
         setPage('home');
         setSelectedCampaign(null);
       }
@@ -8224,10 +8870,11 @@ export default function App() {
           setCampaigns(updatedCampaigns);
         }
 
-        // Verificar parâmetro "rifa" e "recovery" na URL
+        // Verificar parâmetro "rifa", "recovery" e "page" na URL
         const urlParams = new URLSearchParams(window.location.search);
         const rifaParam = urlParams.get('rifa');
         const recoveryParam = urlParams.get('recovery');
+        const pageParam = urlParams.get('page');
         let selected: Campaign | undefined;
         
         if (recoveryParam) {
@@ -8238,6 +8885,14 @@ export default function App() {
             setSelectedCampaign(selected);
             setPage('campaign-details');
           }
+        } else if (pageParam === 'politica-de-privacidade') {
+          setPage('privacy-policy');
+        } else if (pageParam === 'termos-de-uso') {
+          setPage('terms-of-use');
+        } else if (pageParam === 'politica-de-cookies') {
+          setPage('cookies-policy');
+        } else if (pageParam === 'lgpd') {
+          setPage('lgpd-form');
         }
 
         // Processar Sessão
@@ -8311,12 +8966,23 @@ export default function App() {
       if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); }
       link.href = settings.seo_canonical_url;
     }
-    if (settings.google_analytics_id && !(window as any).__gaLoaded) {
-      const script = document.createElement('script'); script.src = `https://www.googletagmanager.com/gtag/js?id=${settings.google_analytics_id}`; script.async = true; document.head.appendChild(script);
-      const script2 = document.createElement('script'); script2.textContent = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${settings.google_analytics_id}');`; document.head.appendChild(script2);
-      (window as any).__gaLoaded = true;
+    // Carregar Analytics e Pixel de acordo com os consentimentos de cookies
+    try {
+      const rawConsent = localStorage.getItem('vairifar-cookie-consent');
+      if (rawConsent) {
+        const consent = JSON.parse(rawConsent);
+        loadAnalyticsAndPixels(consent, settings);
+      }
+    } catch (e) {
+      console.error('Erro ao ler consentimento de cookies:', e);
     }
   }, [settings]);
+
+  useEffect(() => {
+    if (cookieConsent && settings) {
+      loadAnalyticsAndPixels(cookieConsent, settings);
+    }
+  }, [cookieConsent, settings]);
 
   const handleLogin = (u: User) => {
     setUser(u);
@@ -8373,7 +9039,7 @@ export default function App() {
 
           {page === 'login' && (
             <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <LoginPage onLogin={handleLogin} />
+              <LoginPage onLogin={handleLogin} onNavigate={setPage} />
             </motion.div>
           )}
           {page === 'reset-password' && (
@@ -8384,10 +9050,20 @@ export default function App() {
           {page === 'dashboard' && user && (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {user.role === 'super_admin' ? (
-                <SuperAdminDashboard user={user} globalSettings={settings} onRefreshSettings={fetchSettings} onLogout={handleLogout} />
+                <SuperAdminDashboard user={user} globalSettings={settings} onRefreshSettings={fetchSettings} onLogout={handleLogout} onNavigateRoot={setPage} />
               ) : (
-                <Dashboard user={user} onSelectCampaign={handleSelectCampaign} globalSettings={settings} onRefreshSettings={fetchSettings} onLogout={handleLogout} />
+                <Dashboard user={user} onSelectCampaign={handleSelectCampaign} globalSettings={settings} onRefreshSettings={fetchSettings} onLogout={handleLogout} onNavigateRoot={setPage} />
               )}
+            </motion.div>
+          )}
+          {['privacy-policy', 'terms-of-use', 'cookies-policy'].includes(page) && (
+            <motion.div key="lgpd-policy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <LGPDPolicyPage page={page} onNavigate={setPage} settings={settings} />
+            </motion.div>
+          )}
+          {page === 'lgpd-form' && (
+            <motion.div key="lgpd-form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <LGPDFormPage onNavigate={setPage} settings={settings} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -8410,13 +9086,91 @@ export default function App() {
             </div>
             <p className="text-zinc-400 text-sm">© 2024 RifaPro. A plataforma líder em sorteios online auditáveis.</p>
             <div className="flex justify-center gap-6 mt-6">
-              <a href="#" className="text-xs font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest">Termos</a>
-              <a href="#" className="text-xs font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest">Privacidade</a>
-              <a href="#" className="text-xs font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest">Ajuda</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setPage('terms-of-use'); }} className="text-xs font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest">Termos</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setPage('privacy-policy'); }} className="text-xs font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest">Privacidade</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setPage('cookies-policy'); }} className="text-xs font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest">Cookies</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setPage('lgpd-form'); }} className="text-xs font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest">Canal LGPD</a>
             </div>
           </div>
         </footer>
       )}
+
+      <AnimatePresence>
+        {showCookieBanner && (
+          <CookieConsentBanner
+            onAcceptAll={async () => {
+              const consent = { necessary: true, statistics: true, marketing: true, personalization: true };
+              localStorage.setItem('vairifar-cookie-consent', JSON.stringify(consent));
+              setCookieConsent(consent);
+              setShowCookieBanner(false);
+              try {
+                await fetch('/api/lgpd/consent', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    user_id: user?.id || null,
+                    consent_type: 'cookies_all',
+                    version: '1.0.0',
+                    accepted: true
+                  })
+                });
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            onRejectOptional={async () => {
+              const consent = { necessary: true, statistics: false, marketing: false, personalization: false };
+              localStorage.setItem('vairifar-cookie-consent', JSON.stringify(consent));
+              setCookieConsent(consent);
+              setShowCookieBanner(false);
+              try {
+                await fetch('/api/lgpd/consent', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    user_id: user?.id || null,
+                    consent_type: 'cookies_necessary_only',
+                    version: '1.0.0',
+                    accepted: true
+                  })
+                });
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            onCustomize={() => setShowCookiePreferences(true)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showCookiePreferences && (
+          <CookiePreferencesModal
+            initialPreferences={cookieConsent}
+            onClose={() => setShowCookiePreferences(false)}
+            onSave={async (prefs) => {
+              localStorage.setItem('vairifar-cookie-consent', JSON.stringify(prefs));
+              setCookieConsent(prefs);
+              setShowCookiePreferences(false);
+              setShowCookieBanner(false);
+              try {
+                await fetch('/api/lgpd/consent', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    user_id: user?.id || null,
+                    consent_type: 'cookies_custom',
+                    version: '1.0.0',
+                    accepted: true
+                  })
+                });
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
