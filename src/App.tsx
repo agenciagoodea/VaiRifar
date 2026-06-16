@@ -133,6 +133,16 @@ const cleanString = (str: string): string => {
     .substring(0, 25);
 };
 
+const cleanSlug = (text: string): string => {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+};
+
 const generateStaticPix = ({ key, name, city, amount, txid }: { key: string, name: string, city?: string, amount: number, txid?: string }): string => {
   let cleanKey = key.trim();
   if (cleanKey.match(/^\+?\d+$/) || cleanKey.includes('(') || cleanKey.includes('-')) {
@@ -1617,7 +1627,7 @@ const CampaignRow: React.FC<{ campaign: Campaign, onSelect: (c: Campaign) => voi
   );
 };
 
-const ManageCampaign = ({ campaign, onBack, onView, onEdit, globalSettings, onRefresh, setShowOrderDetails }: { campaign: Campaign, onBack: () => void, onView: (c: Campaign) => void, onEdit: (c: Campaign) => void, globalSettings: any, onRefresh: () => void, setShowOrderDetails: (order: any) => void }) => {
+const ManageCampaign = ({ campaign, onBack, onView, onEdit, globalSettings, onRefresh, setShowOrderDetails, user }: { campaign: Campaign, onBack: () => void, onView: (c: Campaign) => void, onEdit: (c: Campaign) => void, globalSettings: any, onRefresh: () => void, setShowOrderDetails: (order: any) => void, user: User }) => {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [showValue, setShowValue] = useState(false);
   const [realSoldCount, setRealSoldCount] = useState<number>(campaign.sold_count || 0);
@@ -4058,7 +4068,7 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
                       type="text"
                       className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-brand-orange"
                       value={formData.title}
-                      onChange={e => setFormData({ ...formData, title: e.target.value, slug: e.target.value.toLowerCase().replace(/ /g, '-') })}
+                      onChange={e => setFormData({ ...formData, title: e.target.value, slug: cleanSlug(e.target.value) })}
                     />
                   </div>
                   <div>
@@ -6496,6 +6506,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
             globalSettings={globalSettings}
             onRefresh={fetchData}
             setShowOrderDetails={setShowOrderDetails}
+            user={user}
           />
         ) : null;
       case 'dashboard':
@@ -7779,18 +7790,88 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   );
 };
 
+const ResetPasswordPage = ({ onResetComplete }: { onResetComplete: () => void }) => {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      alert("As senhas não coincidem!");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      alert("Senha redefinida com sucesso! Faça login com a sua nova senha.");
+      onResetComplete();
+    } catch (err: any) {
+      alert(err.message || "Erro ao redefinir a senha.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center px-4">
+      <div className="bg-white p-8 rounded-3xl border border-zinc-100 shadow-2xl w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Shield className="text-white w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-black text-zinc-900">Nova Senha</h1>
+          <p className="text-zinc-500 text-sm">Digite sua nova senha abaixo para acessar sua conta.</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nova Senha</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Confirmar Nova Senha</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          <button
+            disabled={loading}
+            className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            Salvar Nova Senha
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isRegister, setIsRegister] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isRegister) {
+      if (mode === 'register') {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -7805,12 +7886,10 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
             role: 'organizer'
           });
         }
-      } else {
+      } else if (mode === 'login') {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.user) {
-          // Buscar perfil em paralelo com o redirecionamento se possível, 
-          // mas aqui esperamos para garantir que temos o role correto.
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
@@ -7828,9 +7907,16 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
             });
           }
         }
+      } else if (mode === 'forgot') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/?recovery=true`
+        });
+        if (error) throw error;
+        alert("E-mail de recuperação enviado com sucesso! Verifique sua caixa de entrada.");
+        setMode('login');
       }
     } catch (err: any) {
-      alert(err.message || 'Erro ao autenticar. Verifique seus dados.');
+      alert(err.message || 'Erro ao processar autenticação. Verifique seus dados.');
     } finally {
       setLoading(false);
     }
@@ -7848,15 +7934,19 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
             <Ticket className="text-white w-8 h-8" />
           </div>
           <h1 className="text-2xl font-black text-zinc-900">
-            {isRegister ? 'Criar sua conta' : 'Bem-vindo de volta'}
+            {mode === 'register' ? 'Criar sua conta' : mode === 'forgot' ? 'Recuperar senha' : 'Bem-vindo de volta'}
           </h1>
           <p className="text-zinc-500 text-sm">
-            {isRegister ? 'Cadastre-se para começar a criar rifas.' : 'Acesse sua conta para gerenciar suas rifas.'}
+            {mode === 'register' 
+              ? 'Cadastre-se para começar a criar rifas.' 
+              : mode === 'forgot' 
+                ? 'Digite seu e-mail para receber o link de redefinição.' 
+                : 'Acesse sua conta para gerenciar suas rifas.'}
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          {isRegister && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === 'register' && (
             <div>
               <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nome Completo</label>
               <input
@@ -7878,34 +7968,57 @@ const LoginPage = ({ onLogin }: { onLogin: (u: User) => void }) => {
               onChange={e => setEmail(e.target.value)}
             />
           </div>
-          <div>
-            <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Senha</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block">Senha</label>
+                {mode === 'login' && (
+                  <span
+                    onClick={() => setMode('forgot')}
+                    className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline"
+                  >
+                    Esqueceu sua senha?
+                  </span>
+                )}
+              </div>
+              <input
+                type="password"
+                required
+                minLength={6}
+                className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+          )}
           <button
             disabled={loading}
             className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-            {isRegister ? 'Criar minha conta' : 'Entrar no Painel'}
+            {mode === 'register' ? 'Criar minha conta' : mode === 'forgot' ? 'Enviar Link de Recuperação' : 'Entrar no Painel'}
           </button>
         </form>
 
         <p className="text-center text-xs text-zinc-400 mt-6">
-          {isRegister ? 'Já tem conta?' : 'Ainda não tem conta?'}{' '}
-          <span
-            className="text-emerald-600 font-bold cursor-pointer hover:underline"
-            onClick={() => setIsRegister(!isRegister)}
-          >
-            {isRegister ? 'Entrar aqui' : 'Crie sua primeira rifa agora.'}
-          </span>
+          {mode === 'forgot' ? (
+            <span
+              className="text-emerald-600 font-bold cursor-pointer hover:underline"
+              onClick={() => setMode('login')}
+            >
+              Voltar para o login
+            </span>
+          ) : (
+            <>
+              {mode === 'register' ? 'Já tem conta?' : 'Ainda não tem conta?'}{' '}
+              <span
+                className="text-emerald-600 font-bold cursor-pointer hover:underline"
+                onClick={() => setMode(mode === 'register' ? 'login' : 'register')}
+              >
+                {mode === 'register' ? 'Entrar aqui' : 'Crie sua primeira rifa agora.'}
+              </span>
+            </>
+          )}
         </p>
       </motion.div>
     </div>
@@ -7940,6 +8053,87 @@ export default function App() {
   useEffect(() => {
     pageRef.current = page;
   }, [page]);
+
+  // Inicializa o estado do histórico do navegador
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const rifaParam = urlParams.get('rifa');
+    const recoveryParam = urlParams.get('recovery');
+    if (recoveryParam) {
+      window.history.replaceState({ page: 'reset-password' }, '', window.location.href);
+    } else if (rifaParam) {
+      window.history.replaceState({ page: 'campaign-details', rifaParam }, '', window.location.href);
+    } else {
+      window.history.replaceState({ page: 'home' }, '', window.location.href);
+    }
+  }, []);
+
+  // Sincroniza estado do React -> URL do navegador
+  useEffect(() => {
+    if (page === 'campaign-details' && selectedCampaign) {
+      const newUrl = `${window.location.origin}/?rifa=${selectedCampaign.slug || selectedCampaign.id}`;
+      if (window.location.search !== `?rifa=${selectedCampaign.slug || selectedCampaign.id}`) {
+        window.history.pushState({ page, campaignId: selectedCampaign.id }, '', newUrl);
+      }
+    } else if (page === 'home') {
+      if (window.location.search) {
+        window.history.pushState({ page }, '', window.location.origin + '/');
+      }
+    } else if (page === 'login') {
+      if (window.location.search || window.location.pathname !== '/') {
+        window.history.pushState({ page }, '', window.location.origin + '/');
+      }
+    } else if (page === 'reset-password') {
+      if (window.location.search !== '?recovery=true') {
+        window.history.pushState({ page }, '', window.location.origin + '/?recovery=true');
+      }
+    } else if (page === 'dashboard') {
+      if (window.location.search || window.location.pathname !== '/') {
+        window.history.pushState({ page }, '', window.location.origin + '/');
+      }
+    }
+  }, [page, selectedCampaign]);
+
+  // Escuta navegações do botão voltar/avançar (popstate)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      if (state) {
+        if (state.page) {
+          setPage(state.page);
+        }
+        if (state.campaignId && campaigns.length > 0) {
+          const found = campaigns.find(c => c.id === state.campaignId);
+          if (found) {
+            setSelectedCampaign(found);
+          }
+        } else {
+          setSelectedCampaign(null);
+        }
+      } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const rifaParam = urlParams.get('rifa');
+        const recoveryParam = urlParams.get('recovery');
+        if (recoveryParam) {
+          setPage('reset-password');
+          return;
+        }
+        if (rifaParam && campaigns.length > 0) {
+          const found = campaigns.find(c => String(c.slug) === rifaParam || String(c.id) === rifaParam);
+          if (found) {
+            setSelectedCampaign(found);
+            setPage('campaign-details');
+            return;
+          }
+        }
+        setPage('home');
+        setSelectedCampaign(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [campaigns]);
 
   const fetchSettings = async () => {
     try {
@@ -8007,6 +8201,7 @@ export default function App() {
         ]);
 
         // Processar Campanhas
+        let updatedCampaigns: Campaign[] = [];
         if (campaignsResult.data) {
           const camps = campaignsResult.data;
           // Buscar quantidades vendidas em paralelo
@@ -8022,11 +8217,27 @@ export default function App() {
             return acc;
           }, {});
 
-          const updatedCampaigns = camps.map(c => ({
+          updatedCampaigns = camps.map(c => ({
             ...c,
             sold_count: countsMap[c.id] || 0
-          }));
-          setCampaigns(updatedCampaigns as Campaign[]);
+          })) as Campaign[];
+          setCampaigns(updatedCampaigns);
+        }
+
+        // Verificar parâmetro "rifa" e "recovery" na URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const rifaParam = urlParams.get('rifa');
+        const recoveryParam = urlParams.get('recovery');
+        let selected: Campaign | undefined;
+        
+        if (recoveryParam) {
+          setPage('reset-password');
+        } else if (rifaParam && updatedCampaigns.length > 0) {
+          selected = updatedCampaigns.find(c => String(c.slug) === rifaParam || String(c.id) === rifaParam);
+          if (selected) {
+            setSelectedCampaign(selected);
+            setPage('campaign-details');
+          }
         }
 
         // Processar Sessão
@@ -8050,9 +8261,12 @@ export default function App() {
             setUser(userData);
             localStorage.setItem('rifapro-user', JSON.stringify(userData));
             
-            // Se o usuário carregar na home mas tiver sessão, manda pro dashboard
-            if (window.location.pathname === '/' || page === 'home' || page === 'login') {
-               setPage('dashboard');
+            // Se o usuário carregar na home mas tiver sessão, manda pro dashboard,
+            // A MENOS QUE ele esteja tentando ver uma rifa específica ou redefinir a senha
+            if (!selected && !recoveryParam) {
+              if (window.location.pathname === '/' || page === 'home' || page === 'login') {
+                 setPage('dashboard');
+              }
             }
           }
         } else {
@@ -8162,6 +8376,11 @@ export default function App() {
               <LoginPage onLogin={handleLogin} />
             </motion.div>
           )}
+          {page === 'reset-password' && (
+            <motion.div key="reset-password" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <ResetPasswordPage onResetComplete={() => setPage('login')} />
+            </motion.div>
+          )}
           {page === 'dashboard' && user && (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {user.role === 'super_admin' ? (
@@ -8178,10 +8397,16 @@ export default function App() {
         <footer className="bg-white border-t border-zinc-100 py-12 mt-24">
           <div className="max-w-7xl mx-auto px-4 text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="bg-zinc-900 p-1.5 rounded-lg">
-                <Ticket className="text-white w-4 h-4" />
-              </div>
-              <span className="text-lg font-bold tracking-tight text-zinc-900">{settings.site_name || 'RifaPro SaaS'}</span>
+              {settings?.site_logo_url ? (
+                <img src={settings.site_logo_url} alt="Logo" className="h-10 w-auto object-contain" />
+              ) : (
+                <>
+                  <div className="bg-zinc-900 p-1.5 rounded-lg">
+                    <Ticket className="text-white w-4 h-4" />
+                  </div>
+                  <span className="text-lg font-bold tracking-tight text-zinc-900">{settings.site_name || 'RifaPro SaaS'}</span>
+                </>
+              )}
             </div>
             <p className="text-zinc-400 text-sm">© 2024 RifaPro. A plataforma líder em sorteios online auditáveis.</p>
             <div className="flex justify-center gap-6 mt-6">
