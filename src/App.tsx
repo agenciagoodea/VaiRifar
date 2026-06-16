@@ -58,7 +58,9 @@ import {
   FileText,
   Link2,
   BarChart3,
-  Trophy
+  Trophy,
+  Cookie,
+  Code
 } from 'lucide-react';
 import type { Campaign, User, Order } from './types';
 import { supabase } from './lib/supabase';
@@ -97,18 +99,39 @@ const formatCurrency = (value: number) => {
 
 const loadAnalyticsAndPixels = (consent: any, settings: any) => {
   if (!consent || !settings) return;
-  if (consent.statistics && settings.google_analytics_id && !(window as any).__gaLoaded) {
+
+  // 1. Google Analytics (Estatísticas)
+  const gaId = settings.lgpd_script_ga_id || settings.google_analytics_id;
+  if (consent.statistics && gaId && !(window as any).__gaLoaded) {
     const script = document.createElement('script');
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${settings.google_analytics_id}`;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
     script.async = true;
     document.head.appendChild(script);
     
     const script2 = document.createElement('script');
-    script2.textContent = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${settings.google_analytics_id}');`;
+    script2.textContent = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}');`;
     document.head.appendChild(script2);
     (window as any).__gaLoaded = true;
   }
-  if (consent.marketing && settings.facebook_pixel_id && !(window as any).__fbPixelLoaded) {
+
+  // 2. Microsoft Clarity (Estatísticas)
+  const clarityId = settings.lgpd_script_clarity_id;
+  if (consent.statistics && clarityId && !(window as any).__clarityLoaded) {
+    const clarityScript = document.createElement('script');
+    clarityScript.textContent = `
+      (function(c,l,a,r,i,t,y){
+          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+      })(window,document,"clarity","script","${clarityId}");
+    `;
+    document.head.appendChild(clarityScript);
+    (window as any).__clarityLoaded = true;
+  }
+
+  // 3. Meta Pixel (Marketing)
+  const metaPixelId = settings.lgpd_script_meta_pixel_id || settings.facebook_pixel_id;
+  if (consent.marketing && metaPixelId && !(window as any).__fbPixelLoaded) {
     const fbScript = document.createElement('script');
     fbScript.textContent = `
       !function(f,b,e,v,n,t,s)
@@ -119,11 +142,66 @@ const loadAnalyticsAndPixels = (consent: any, settings: any) => {
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '${settings.facebook_pixel_id}');
+      fbq('init', '${metaPixelId}');
       fbq('track', 'PageView');
     `;
     document.head.appendChild(fbScript);
     (window as any).__fbPixelLoaded = true;
+  }
+
+  // 4. Google Tag Manager (GTM - Rastreamento/Marketing)
+  const gtmId = settings.lgpd_script_gtm_id;
+  if (consent.marketing && gtmId && !(window as any).__gtmLoaded) {
+    const gtmScript = document.createElement('script');
+    gtmScript.textContent = `
+      (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+      new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+      j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+      'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+      })(window,document,'script','dataLayer','${gtmId}');
+    `;
+    document.head.appendChild(gtmScript);
+    
+    // GTM NoScript fallback
+    const gtmNoScript = document.createElement('noscript');
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.googletagmanager.com/ns.html?id=${gtmId}`;
+    iframe.height = "0";
+    iframe.width = "0";
+    iframe.style.display = "none";
+    iframe.style.visibility = "hidden";
+    gtmNoScript.appendChild(iframe);
+    document.body.appendChild(gtmNoScript);
+
+    (window as any).__gtmLoaded = true;
+  }
+
+  // 5. Outros Scripts Customizados (Marketing)
+  const customScripts = settings.lgpd_custom_scripts;
+  if (consent.marketing && customScripts && !(window as any).__customScriptsLoaded) {
+    try {
+      const container = document.createElement('div');
+      container.innerHTML = customScripts;
+      const scripts = container.querySelectorAll('script');
+      scripts.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        if (oldScript.src) {
+          newScript.src = oldScript.src;
+          newScript.async = true;
+        } else {
+          newScript.textContent = oldScript.textContent;
+        }
+        document.head.appendChild(newScript);
+      });
+      container.querySelectorAll('script').forEach(s => s.remove());
+      if (container.innerHTML.trim().length > 0) {
+        document.body.appendChild(container);
+      }
+      (window as any).__customScriptsLoaded = true;
+    } catch (err) {
+      console.error('Erro ao carregar scripts customizados da LGPD:', err);
+    }
   }
 };
 
@@ -3203,6 +3281,13 @@ const CampaignDetails = ({ campaign, onBack, globalSettings }: { campaign: Campa
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-white">
       <div className="max-w-2xl mx-auto px-4 pt-6 pb-2">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-4 select-none">
+          <a href="#" onClick={(e) => { e.preventDefault(); onBack(); }} className="hover:text-zinc-950 transition-colors">Home</a>
+          <ChevronRight className="w-3 h-3 text-zinc-300" />
+          <span className="text-zinc-400">Rifas</span>
+          <ChevronRight className="w-3 h-3 text-zinc-300" />
+          <span className="text-zinc-800 font-black truncate max-w-[200px]" title={campaign.title}>{campaign.title}</span>
+        </nav>
         <button onClick={onBack} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 transition-colors mb-4">
           <ChevronRight className="rotate-180 w-4 h-4" />
           <span className="text-sm font-semibold">Voltar</span>
@@ -3882,8 +3967,42 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
     min_tickets: (initialData as any)?.min_tickets || 1,
     max_tickets: (initialData as any)?.max_tickets || null,
     reservation_expiry: (initialData as any)?.reservation_expiry || '24',
-    regulation: (initialData as any)?.regulation || ''
+    regulation: (initialData as any)?.regulation || '',
+    seo_settings: (initialData as any)?.seo_settings || {
+      title_seo: '',
+      description_seo: '',
+      slug: initialData?.slug || '',
+      keyword_main: '',
+      keywords_related: '',
+      image_seo: '',
+      image_alt: '',
+      canonical_url: '',
+      index_status: 'index'
+    }
   });
+
+  const generateSeoSuggestions = () => {
+    const premios = formData.prizes.length > 0 ? formData.prizes.map((p: any) => p.description).join(', ') : 'prêmios incríveis';
+    const preco = formatCurrency(formData.ticket_price);
+    const suggestedTitle = `${formData.title} | Adquira por ${preco}`;
+    const suggestedDesc = `Participe do sorteio online "${formData.title}". Prêmios: ${premios}. Adquira sua cota por apenas ${preco} no Vai Rifar!`;
+    const suggestedSlug = cleanSlug(formData.title);
+
+    setFormData({
+      ...formData,
+      seo_settings: {
+        ...formData.seo_settings,
+        title_seo: suggestedTitle.substring(0, 60),
+        description_seo: suggestedDesc.substring(0, 160),
+        slug: suggestedSlug,
+        keyword_main: formData.title.toLowerCase(),
+        keywords_related: 'sorteio online, rifas online, cota premiada, bilhete da sorte',
+        image_seo: formData.image_url,
+        image_alt: `Imagem de divulgação do sorteio ${formData.title}`,
+        canonical_url: globalSettings?.seo_site_url ? `${globalSettings.seo_site_url}/rifa/${suggestedSlug}` : ''
+      }
+    });
+  };
 
   const calculateTax = () => {
     try {
@@ -4002,7 +4121,7 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step < 3) {
+    if (step < 4) {
       setStep(step + 1);
       return;
     }
@@ -4013,8 +4132,9 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Você precisa estar logado para criar uma campanha. Faça login novamente.');
 
-      // Gerar slug único para evitar conflito 409
-      const resolvedSlug = await generateUniqueSlug(formData.title, initialData?.id);
+      // Usar o slug de SEO do usuário ou gerar
+      const requestedSlug = formData.seo_settings?.slug || formData.slug || formData.title;
+      const resolvedSlug = await generateUniqueSlug(requestedSlug, initialData?.id);
 
       const payload = {
         title: formData.title,
@@ -4032,7 +4152,11 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
         max_tickets: formData.max_tickets,
         reservation_expiry: formData.reservation_expiry,
         regulation: formData.regulation || null,
-        status: initialData ? initialData.status : 'pending'
+        status: initialData ? initialData.status : 'pending',
+        seo_settings: {
+          ...formData.seo_settings,
+          slug: resolvedSlug
+        }
       };
 
       if (initialData) {
@@ -4059,7 +4183,8 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
   const steps = [
     { id: 1, label: 'Informações' },
     { id: 2, label: 'Regulamento' },
-    { id: 3, label: 'Modo/Resultado' }
+    { id: 3, label: 'Modo/Resultado' },
+    { id: 4, label: 'SEO e Divulgação' }
   ];
 
   return (
@@ -4514,6 +4639,191 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
               </div>
             )}
 
+            {step === 4 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 text-left">
+                {/* Edição de SEO */}
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-zinc-900 text-base">Configuração de Rastreamento</h3>
+                    <button
+                      type="button"
+                      onClick={generateSeoSuggestions}
+                      className="px-3 py-1.5 bg-brand-orange/15 text-brand-orange hover:bg-brand-orange/20 rounded-xl text-xs font-bold transition-all uppercase tracking-wider"
+                    >
+                      Sugerir Metadados
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Título SEO (Title Tag)</label>
+                      <input
+                        type="text"
+                        className="w-full h-11 rounded-xl border border-zinc-200 px-4 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-orange bg-white"
+                        placeholder="Título exibido no Google"
+                        value={formData.seo_settings?.title_seo || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          seo_settings: { ...formData.seo_settings, title_seo: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Slug da URL amigável</label>
+                      <input
+                        type="text"
+                        className="w-full h-11 rounded-xl border border-zinc-200 px-4 text-xs font-mono outline-none focus:ring-2 focus:ring-brand-orange bg-white"
+                        placeholder="Ex: fusca-azul-1972"
+                        value={formData.seo_settings?.slug || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          seo_settings: { ...formData.seo_settings, slug: cleanSlug(e.target.value) }
+                        })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Descrição de Compartilhamento (Meta Description)</label>
+                      <textarea
+                        rows={3}
+                        className="w-full rounded-xl border border-zinc-200 p-4 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-orange bg-white resize-none"
+                        placeholder="Descrição exibida na busca do Google"
+                        value={formData.seo_settings?.description_seo || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          seo_settings: { ...formData.seo_settings, description_seo: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Palavra-chave Principal</label>
+                        <input
+                          type="text"
+                          className="w-full h-11 rounded-xl border border-zinc-200 px-4 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-orange bg-white"
+                          placeholder="Ex: fusca azul"
+                          value={formData.seo_settings?.keyword_main || ''}
+                          onChange={e => setFormData({
+                            ...formData,
+                            seo_settings: { ...formData.seo_settings, keyword_main: e.target.value }
+                          })}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Palavras Relacionadas</label>
+                        <input
+                          type="text"
+                          className="w-full h-11 rounded-xl border border-zinc-200 px-4 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-orange bg-white"
+                          placeholder="Ex: rifa, carro, antigo"
+                          value={formData.seo_settings?.keywords_related || ''}
+                          onChange={e => setFormData({
+                            ...formData,
+                            seo_settings: { ...formData.seo_settings, keywords_related: e.target.value }
+                          })}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">URL da Imagem Social</label>
+                        <input
+                          type="text"
+                          className="w-full h-11 rounded-xl border border-zinc-200 px-4 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-orange bg-white"
+                          placeholder="URL da imagem (1200x630)"
+                          value={formData.seo_settings?.image_seo || ''}
+                          onChange={e => setFormData({
+                            ...formData,
+                            seo_settings: { ...formData.seo_settings, image_seo: e.target.value }
+                          })}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Texto Alt da Imagem</label>
+                        <input
+                          type="text"
+                          className="w-full h-11 rounded-xl border border-zinc-200 px-4 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-orange bg-white"
+                          placeholder="Descrição para Google Imagens"
+                          value={formData.seo_settings?.image_alt || ''}
+                          onChange={e => setFormData({
+                            ...formData,
+                            seo_settings: { ...formData.seo_settings, image_alt: e.target.value }
+                          })}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">URL Canônica</label>
+                        <input
+                          type="text"
+                          className="w-full h-11 rounded-xl border border-zinc-200 px-4 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-orange bg-white"
+                          placeholder="Deixe vazio para autodetectar"
+                          value={formData.seo_settings?.canonical_url || ''}
+                          onChange={e => setFormData({
+                            ...formData,
+                            seo_settings: { ...formData.seo_settings, canonical_url: e.target.value }
+                          })}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Rastreamento Google</label>
+                        <select
+                          className="w-full h-11 rounded-xl border border-zinc-200 px-3 text-xs bg-white outline-none focus:ring-2 focus:ring-brand-orange"
+                          value={formData.seo_settings?.index_status || 'index'}
+                          onChange={e => setFormData({
+                            ...formData,
+                            seo_settings: { ...formData.seo_settings, index_status: e.target.value }
+                          })}
+                        >
+                          <option value="index">Permitir indexar (Recomendado)</option>
+                          <option value="noindex">Bloquear indexação (noindex)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Previews Visuais */}
+                <div className="space-y-6">
+                  <h3 className="font-bold text-zinc-900 text-base">Visualização no Google & Redes Sociais</h3>
+
+                  {/* Google Search Preview */}
+                  <div className="bg-white border border-zinc-100 rounded-2xl p-6 shadow-sm space-y-2">
+                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block">Prévia da Busca Google</span>
+                    <div className="font-sans text-left">
+                      <span className="text-zinc-500 text-xs block truncate max-w-full font-mono">
+                        {globalSettings?.seo_site_url || 'https://www.vairifar.com.br'}/rifa/{formData.seo_settings?.slug || cleanSlug(formData.title)}
+                      </span>
+                      <a href="#" className="text-blue-800 text-lg hover:underline font-medium block leading-snug mt-1 max-w-full truncate">
+                        {formData.seo_settings?.title_seo || formData.title || 'Título do sorteio no Google'}
+                      </a>
+                      <p className="text-zinc-600 text-xs mt-1 leading-normal break-all">
+                        {formData.seo_settings?.description_seo || formData.description || 'Preencha a descrição SEO para simular a visualização de snippet de pesquisa no Google.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp / Social Card Preview */}
+                  <div className="bg-[#e7f3ef] border border-zinc-200/50 rounded-2xl p-6 shadow-sm space-y-3">
+                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block">Prévia de Compartilhamento (Card Social)</span>
+                    <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden text-left flex flex-col">
+                      {formData.image_url && (
+                        <img src={formData.image_url} alt="Share" className="w-full h-36 object-cover" />
+                      )}
+                      <div className="p-4 bg-zinc-50 border-t border-zinc-100 space-y-1">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">VAIRIFAR.COM.BR</span>
+                        <span className="font-bold text-zinc-900 text-sm block truncate">
+                          {formData.seo_settings?.title_seo || formData.title || 'Título do Compartilhamento'}
+                        </span>
+                        <span className="text-zinc-500 text-xs block truncate">
+                          {formData.seo_settings?.description_seo || formData.description || 'Descrição do sorteio no card social.'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="pt-8 flex gap-4">
               {step > 1 && (
                 <button
@@ -4533,7 +4843,7 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    {step === 3 ? 'Finalizar' : 'Continuar'}
+                    {step === 4 ? 'Finalizar' : 'Continuar'}
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}
@@ -5345,20 +5655,758 @@ const MercadoPagoSettingsPanel = () => {
   );
 };
 
+const SeoSettingsPanel = ({ globalSettings, onRefreshSettings, user }: { globalSettings: any, onRefreshSettings: () => void | Promise<any>, user: User }) => {
+  const [seoTab, setSeoTab] = useState<'settings' | 'redirects' | 'notfound' | 'audit'>('settings');
+  const [localSettings, setLocalSettings] = useState<any>(globalSettings || {});
+  const [saving, setSaving] = useState(false);
+
+  // Estados de Redirecionamentos
+  const [redirects, setRedirects] = useState<any[]>([]);
+  const [loadingRedirects, setLoadingRedirects] = useState(false);
+  const [showRedirectForm, setShowRedirectForm] = useState(false);
+  const [redirectFormData, setRedirectFormData] = useState({
+    id: undefined as number | undefined,
+    old_url: '',
+    new_url: '',
+    redirect_type: 301,
+    active: true
+  });
+
+  // Estados de Logs 404
+  const [notfoundLogs, setNotfoundLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  // Estados de Campanhas para Auditoria de Alt Text
+  const [auditCampaigns, setAuditCampaigns] = useState<Campaign[]>([]);
+
+  useEffect(() => {
+    setLocalSettings(globalSettings || {});
+  }, [globalSettings]);
+
+  const loadRedirects = async () => {
+    setLoadingRedirects(true);
+    try {
+      const data = await fetchJsonWithAuth('/api/admin/seo/redirects');
+      if (data.success) {
+        setRedirects(data.redirects || []);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar redirecionamentos:', err);
+    } finally {
+      setLoadingRedirects(false);
+    }
+  };
+
+  const loadNotfoundLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const data = await fetchJsonWithAuth('/api/admin/seo/notfound-logs');
+      if (data.success) {
+        setNotfoundLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar logs de 404:', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const loadAuditCampaigns = async () => {
+    try {
+      const { data } = await supabase
+        .from('campaigns')
+        .select('*')
+        .in('status', ['active', 'finished']);
+      if (data) setAuditCampaigns(data as Campaign[]);
+    } catch (err) {
+      console.error('Erro ao carregar campanhas para auditoria:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (seoTab === 'redirects') loadRedirects();
+    if (seoTab === 'notfound') loadNotfoundLogs();
+    if (seoTab === 'audit') {
+      loadNotfoundLogs();
+      loadAuditCampaigns();
+    }
+  }, [seoTab]);
+
+  const handleSaveGlobalSeo = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setSaving(true);
+    try {
+      await fetchJsonWithAuth('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings: localSettings })
+      });
+      alert('Configurações globais de SEO atualizadas com sucesso!');
+      await onRefreshSettings();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar configurações de SEO.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveRedirect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetchJsonWithAuth('/api/admin/seo/redirects', {
+        method: 'POST',
+        body: JSON.stringify(redirectFormData)
+      });
+      alert(res.message || 'Redirecionamento salvo com sucesso.');
+      setShowRedirectForm(false);
+      setRedirectFormData({ id: undefined, old_url: '', new_url: '', redirect_type: 301, active: true });
+      loadRedirects();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar redirecionamento.');
+    }
+  };
+
+  const handleDeleteRedirect = async (id: number) => {
+    if (!confirm('Deseja realmente excluir este redirecionamento?')) return;
+    try {
+      const res = await fetchJsonWithAuth(`/api/admin/seo/redirects/${id}`, {
+        method: 'DELETE'
+      });
+      alert(res.message || 'Redirecionamento excluído.');
+      loadRedirects();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir redirecionamento.');
+    }
+  };
+
+  const handleDeleteNotFoundLog = async (id: number) => {
+    try {
+      const res = await fetchJsonWithAuth(`/api/admin/seo/notfound-logs/${id}`, {
+        method: 'DELETE'
+      });
+      loadNotfoundLogs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir log 404.');
+    }
+  };
+
+  const handleClearNotFoundLogs = async () => {
+    if (!confirm('Deseja realmente limpar todos os logs de erro 404?')) return;
+    try {
+      const res = await fetchJsonWithAuth('/api/admin/seo/notfound-logs', {
+        method: 'DELETE'
+      });
+      alert(res.message || 'Todos os logs foram excluídos.');
+      loadNotfoundLogs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao limpar logs.');
+    }
+  };
+
+  // Funções de Auditoria
+  const getAuditStatus = () => {
+    const siteUrl = localSettings.seo_site_url;
+    const siteTitle = localSettings.seo_title_default;
+    const siteDesc = localSettings.seo_description_default;
+    const companyName = localSettings.seo_company_name;
+    const companyCnpj = localSettings.seo_company_cnpj;
+    const verificationTag = localSettings.google_search_console_tag;
+    const gaId = localSettings.google_analytics_id || localSettings.lgpd_script_ga_id;
+
+    const items = [
+      {
+        id: 'sitemap',
+        name: 'Sitemap XML Automático',
+        status: siteUrl ? 'OK' : 'Atenção',
+        desc: siteUrl ? `Indexador ativo. Sitemap em: ${siteUrl}/sitemap.xml` : 'Configure a URL oficial do site para habilitar o sitemap com URLs corretas.',
+        link: siteUrl ? `${siteUrl}/sitemap.xml` : undefined
+      },
+      {
+        id: 'robots',
+        name: 'Robots.txt Dinâmico',
+        status: 'OK',
+        desc: 'Arquivo robots.txt configurado dinamicamente no servidor, liberando caminhos públicos e bloqueando checkout e painéis privados.',
+        link: siteUrl ? `${siteUrl}/robots.txt` : '/robots.txt'
+      },
+      {
+        id: 'google_verification',
+        name: 'Google Search Console',
+        status: verificationTag ? 'OK' : 'Pendente',
+        desc: verificationTag ? 'Meta tag de verificação configurada com sucesso.' : 'Tag de verificação do Search Console não cadastrada.',
+      },
+      {
+        id: 'google_analytics',
+        name: 'Google Analytics 4',
+        status: gaId ? 'OK' : 'Pendente',
+        desc: gaId ? 'GA4 configurado com carregamento condicional pela LGPD.' : 'ID do Google Analytics não configurado.',
+      },
+      {
+        id: 'global_seo',
+        name: 'Título e Descrição SEO Padrão',
+        status: (siteTitle && siteDesc) ? 'OK' : 'Erro',
+        desc: (siteTitle && siteDesc) ? 'Título e descrição de compartilhamento global configurados.' : 'Por favor, preencha o Título padrão e a Descrição padrão para evitar tags vazias no Google.',
+      },
+      {
+        id: 'structured_data',
+        name: 'Dados Estruturados JSON-LD',
+        status: (companyName && companyCnpj) ? 'OK' : 'Atenção',
+        desc: (companyName && companyCnpj) ? 'Schemas Organization e WebSite configurados com CNPJ e detalhes corporativos.' : 'Cadastre o Nome da Empresa e o CNPJ nas Configurações Globais de SEO para ativar os dados estruturados de Organization completos no Google.',
+      },
+      {
+        id: 'image_alt',
+        name: 'Imagens de Campanhas com Alt Text',
+        status: auditCampaigns.length === 0 ? 'OK' : (auditCampaigns.filter(c => !(c.seo_settings as any)?.image_alt).length === 0 ? 'OK' : 'Atenção'),
+        desc: (() => {
+          if (auditCampaigns.length === 0) return 'Nenhuma campanha cadastrada.';
+          const missing = auditCampaigns.filter(c => !(c.seo_settings as any)?.image_alt);
+          if (missing.length === 0) return 'Todas as imagens de campanhas ativas possuem texto alternativo (Alt text). Excelente!';
+          return `Existem ${missing.length} campanhas de rifas ativas que não possuem o campo 'Alt Text' da imagem de SEO configurado. Isso prejudica o ranqueamento no Google Imagens.`;
+        })()
+      },
+      {
+        id: 'notfound_monitored',
+        name: 'Monitoramento de Páginas 404',
+        status: notfoundLogs.length > 5 ? 'Atenção' : 'OK',
+        desc: notfoundLogs.length > 0 ? `Foram registrados ${notfoundLogs.reduce((acc, log) => acc + (log.occurrences || 1), 0)} acessos à páginas não encontradas. Verifique e crie redirecionamentos para preservar a autoridade do site.` : 'Nenhum erro de página 404 recente registrado. Fantástico!',
+      }
+    ];
+
+    const counts = items.reduce((acc, it) => {
+      acc[it.status] = (acc[it.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return { items, counts };
+  };
+
+  const audit = getAuditStatus();
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-zinc-100 shadow-sm overflow-hidden text-left">
+      {/* Header */}
+      <div className="p-8 border-b border-zinc-100 flex flex-wrap justify-between items-center bg-zinc-50/50 gap-4">
+        <div>
+          <h2 className="text-xl font-black text-zinc-900 flex items-center gap-3">
+            <Globe className="w-5 h-5 text-emerald-600 animate-pulse" /> SEO e Google
+          </h2>
+          <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest mt-1">Configurações globais, Sitemap, Robots, Redirecionamentos e Auditoria</p>
+        </div>
+        <div className="flex gap-2 bg-zinc-100 p-1 rounded-2xl">
+          {[
+            { id: 'settings', label: 'Globais & Scripts', icon: SettingsIcon },
+            { id: 'redirects', label: 'Redirecionamentos', icon: Link2 },
+            { id: 'notfound', label: 'Erros 404', icon: AlertCircle },
+            { id: 'audit', label: 'Auditoria SEO', icon: CheckCircle2 }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setSeoTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${seoTab === tab.id
+                ? 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-600'
+                }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-8">
+        {/* TAB 1: SETTINGS */}
+        {seoTab === 'settings' && (
+          <form onSubmit={handleSaveGlobalSeo} className="space-y-8 animate-fadeIn">
+            {/* SEO Base */}
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-zinc-800 border-b border-zinc-50 pb-2">Metadados Globais Padrão (Fallback)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Título Padrão do Site</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_title_default || ''} onChange={e => setLocalSettings({ ...localSettings, seo_title_default: e.target.value })} placeholder="Ex: VaiRifar - Sorteios e Campanhas Online" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">URL Oficial do Site</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_site_url || ''} onChange={e => setLocalSettings({ ...localSettings, seo_site_url: e.target.value })} placeholder="Ex: https://www.vairifar.com.br" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Descrição Padrão (Meta Description)</label>
+                  <textarea rows={3} className="w-full rounded-xl border border-zinc-200 p-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm" value={localSettings.seo_description_default || ''} onChange={e => setLocalSettings({ ...localSettings, seo_description_default: e.target.value })} placeholder="Descrição para o Google (recomendado até 160 caracteres)" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Palavras-chave Padrão</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_keywords_default || ''} onChange={e => setLocalSettings({ ...localSettings, seo_keywords_default: e.target.value })} placeholder="rifas online, sorteios online, cota premiada" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nome da Marca</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_site_name || ''} onChange={e => setLocalSettings({ ...localSettings, seo_site_name: e.target.value })} placeholder="Ex: VaiRifar" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">URL da Imagem Social de Compartilhamento (1200x630)</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_share_image || ''} onChange={e => setLocalSettings({ ...localSettings, seo_share_image: e.target.value })} placeholder="Ex: https://dominio.com/assets/og-default.jpg" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Favicon (URL do ícone do navegador)</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_favicon_url || ''} onChange={e => setLocalSettings({ ...localSettings, seo_favicon_url: e.target.value })} placeholder="Ex: https://dominio.com/favicon.ico" />
+                </div>
+              </div>
+            </div>
+
+            {/* Local Business / Dados Estruturados */}
+            <div className="space-y-6 pt-4">
+              <h3 className="text-lg font-bold text-zinc-800 border-b border-zinc-50 pb-2">Informações da Empresa e SEO Local (Schema Organization)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Razão Social / Nome da Empresa</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_company_name || ''} onChange={e => setLocalSettings({ ...localSettings, seo_company_name: e.target.value })} placeholder="Ex: Vai Rifar Soluções Digitais LTDA" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">CNPJ</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_company_cnpj || ''} onChange={e => setLocalSettings({ ...localSettings, seo_company_cnpj: e.target.value })} placeholder="Ex: 00.000.000/0001-00" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Telefone Principal</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_company_phone || ''} onChange={e => setLocalSettings({ ...localSettings, seo_company_phone: e.target.value })} placeholder="Ex: (11) 4002-8922" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">WhatsApp Oficial</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_company_whatsapp || ''} onChange={e => setLocalSettings({ ...localSettings, seo_company_whatsapp: e.target.value })} placeholder="Ex: 5511999999999" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">E-mail Corporativo</label>
+                  <input type="email" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_company_email || ''} onChange={e => setLocalSettings({ ...localSettings, seo_company_email: e.target.value })} placeholder="Ex: contato@vairifar.com.br" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Endereço Completo</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_company_address || ''} onChange={e => setLocalSettings({ ...localSettings, seo_company_address: e.target.value })} placeholder="Av. Paulista, 1000, Bela Vista, São Paulo - SP" />
+                </div>
+              </div>
+            </div>
+
+            {/* Redes Sociais */}
+            <div className="space-y-6 pt-4">
+              <h3 className="text-lg font-bold text-zinc-800 border-b border-zinc-50 pb-2">Redes Sociais Oficiais</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Instagram Link</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_social_instagram || ''} onChange={e => setLocalSettings({ ...localSettings, seo_social_instagram: e.target.value })} placeholder="https://instagram.com/perfil" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Facebook Link</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_social_facebook || ''} onChange={e => setLocalSettings({ ...localSettings, seo_social_facebook: e.target.value })} placeholder="https://facebook.com/pagina" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">YouTube Link</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_social_youtube || ''} onChange={e => setLocalSettings({ ...localSettings, seo_social_youtube: e.target.value })} placeholder="https://youtube.com/canal" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Twitter/X Link</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_social_twitter || ''} onChange={e => setLocalSettings({ ...localSettings, seo_social_twitter: e.target.value })} placeholder="https://twitter.com/usuario" />
+                </div>
+              </div>
+            </div>
+
+            {/* Integração Google */}
+            <div className="space-y-6 pt-4">
+              <h3 className="text-lg font-bold text-zinc-800 border-b border-zinc-50 pb-2">Verificação Google & Tags de Rastreamento (LGPD-safe)</h3>
+              <p className="text-xs text-zinc-400 font-medium">Os scripts de Marketing e Estatísticas só serão inicializados no navegador caso o usuário concorde no banner de cookies.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Google Search Console Verification Tag</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.google_search_console_tag || ''} onChange={e => setLocalSettings({ ...localSettings, google_search_console_tag: e.target.value })} placeholder='Ex: <meta name="google-site-verification" content="XYZ..." /> ou código do Search Console' />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Google Analytics 4 ID (GA4)</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.google_analytics_id || ''} onChange={e => {
+                    const val = e.target.value;
+                    setLocalSettings({ ...localSettings, google_analytics_id: val, lgpd_script_ga_id: val });
+                  }} placeholder="G-XXXXXXXXXX" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Google Tag Manager ID (GTM)</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_script_gtm_id || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_script_gtm_id: e.target.value })} placeholder="GTM-XXXXXXX" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Google Ads Conversion ID</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.google_ads_conversion_id || ''} onChange={e => setLocalSettings({ ...localSettings, google_ads_conversion_id: e.target.value })} placeholder="AW-XXXXXXXXX" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Meta Pixel ID (Facebook)</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.facebook_pixel_id || ''} onChange={e => {
+                    const val = e.target.value;
+                    setLocalSettings({ ...localSettings, facebook_pixel_id: val, lgpd_script_meta_pixel_id: val });
+                  }} placeholder="Ex: 123456789012" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Microsoft Clarity ID</label>
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_script_clarity_id || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_script_clarity_id: e.target.value })} placeholder="Ex: abcde123" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Configuração de Rastreamento Adicional (Robots.txt Customizado)</label>
+                  <textarea rows={4} className="w-full rounded-xl border border-zinc-200 p-4 font-mono text-xs outline-none focus:ring-2 focus:ring-emerald-500 resize-none" value={localSettings.seo_robots_txt || ''} onChange={e => setLocalSettings({ ...localSettings, seo_robots_txt: e.target.value })} placeholder="Deixe em branco para usar o robots.txt padrão gerado automaticamente pelo sistema." />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <button type="submit" disabled={saving} className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 text-sm shadow-md">
+                {saving ? 'Salvando...' : 'Salvar Alterações de SEO'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* TAB 2: REDIRECTS */}
+        {seoTab === 'redirects' && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-zinc-800">Redirecionamentos de URLs (301/302)</h3>
+                <p className="text-xs text-zinc-400 font-medium">Mapeie links antigos ou quebrados para novas páginas preservando o pagerank.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRedirectFormData({ id: undefined, old_url: '', new_url: '', redirect_type: 301, active: true });
+                  setShowRedirectForm(true);
+                }}
+                className="px-4 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Novo Redirecionamento
+              </button>
+            </div>
+
+            {showRedirectForm && (
+              <form onSubmit={handleSaveRedirect} className="bg-zinc-50 border border-zinc-100 rounded-2xl p-6 space-y-4 animate-in fade-in duration-200 text-left">
+                <h4 className="font-bold text-zinc-800 text-sm">{redirectFormData.id ? 'Editar Redirecionamento' : 'Criar Novo Redirecionamento'}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Origem (URL Antiga)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: /sorteio-fusca"
+                      className="w-full h-11 rounded-lg border border-zinc-200 px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={redirectFormData.old_url}
+                      onChange={e => setRedirectFormData({ ...redirectFormData, old_url: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Destino (URL Nova)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: /rifa/fusca-azul-1972"
+                      className="w-full h-11 rounded-lg border border-zinc-200 px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={redirectFormData.new_url}
+                      onChange={e => setRedirectFormData({ ...redirectFormData, new_url: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Tipo do Redirecionamento</label>
+                    <select
+                      className="w-full h-11 rounded-lg border border-zinc-200 px-3 text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={redirectFormData.redirect_type}
+                      onChange={e => setRedirectFormData({ ...redirectFormData, redirect_type: parseInt(e.target.value) })}
+                    >
+                      <option value={301}>301 (Permanente - Mantém SEO)</option>
+                      <option value={302}>302 (Temporário)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-6 pl-1">
+                    <input
+                      type="checkbox"
+                      id="redirect-active"
+                      className="w-5 h-5 rounded text-emerald-600 border-zinc-300 focus:ring-emerald-500 cursor-pointer"
+                      checked={redirectFormData.active}
+                      onChange={e => setRedirectFormData({ ...redirectFormData, active: e.target.checked })}
+                    />
+                    <label htmlFor="redirect-active" className="text-xs font-bold text-zinc-600 cursor-pointer uppercase tracking-wider">Habilitar Redirecionamento</label>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setShowRedirectForm(false)} className="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 rounded-lg text-xs font-bold uppercase tracking-widest transition-all">Cancelar</button>
+                  <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all">Salvar</button>
+                </div>
+              </form>
+            )}
+
+            <div className="overflow-hidden border border-zinc-100 rounded-2xl">
+              <table className="w-full text-left bg-zinc-50/50">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                    <th className="px-6 py-4">URL Origem</th>
+                    <th className="px-6 py-4">URL Destino</th>
+                    <th className="px-6 py-4">Tipo</th>
+                    <th className="px-6 py-4">Cliques</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 text-sm bg-white">
+                  {loadingRedirects ? (
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-zinc-400">Buscando redirecionamentos...</td></tr>
+                  ) : redirects.length > 0 ? (
+                    redirects.map((r: any) => (
+                      <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
+                        <td className="px-6 py-4 font-mono text-xs text-zinc-600 font-bold select-all">{r.old_url}</td>
+                        <td className="px-6 py-4 font-mono text-xs text-emerald-600 font-bold select-all">{r.new_url}</td>
+                        <td className="px-6 py-4 font-bold text-zinc-500">HTTP {r.redirect_type}</td>
+                        <td className="px-6 py-4 font-black text-zinc-700">{r.clicks || 0}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${r.active ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-400'}`}>
+                            {r.active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRedirectFormData({ id: r.id, old_url: r.old_url, new_url: r.new_url, redirect_type: r.redirect_type, active: r.active });
+                                setShowRedirectForm(true);
+                              }}
+                              className="text-zinc-400 hover:text-emerald-600 text-xs font-bold uppercase tracking-widest"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRedirect(r.id)}
+                              className="text-red-400 hover:text-red-600 text-xs font-bold uppercase tracking-widest"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={6} className="px-6 py-12 text-center text-zinc-400 text-sm font-medium">Nenhum redirecionamento configurado.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: NOT FOUND (404) LOGS */}
+        {seoTab === 'notfound' && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-zinc-800">Monitoramento de Erros 404 (Página Não Encontrada)</h3>
+                <p className="text-xs text-zinc-400 font-medium">Lista de caminhos inválidos acessados por usuários ou rastreadores.</p>
+              </div>
+              {notfoundLogs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearNotFoundLogs}
+                  className="px-4 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-red-100 transition-all flex items-center gap-2 border border-red-100"
+                >
+                  <Trash2 className="w-4 h-4" /> Limpar Todos os Logs
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-hidden border border-zinc-100 rounded-2xl">
+              <table className="w-full text-left bg-zinc-50/50">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                    <th className="px-6 py-4">URL Inválida</th>
+                    <th className="px-6 py-4">Origem / Referrer</th>
+                    <th className="px-6 py-4">Ocorrências</th>
+                    <th className="px-6 py-4">Última Tentativa</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 text-sm bg-white">
+                  {loadingLogs ? (
+                    <tr><td colSpan={5} className="px-6 py-8 text-center text-zinc-400">Buscando logs...</td></tr>
+                  ) : notfoundLogs.length > 0 ? (
+                    notfoundLogs.map((log: any) => (
+                      <tr key={log.id} className="hover:bg-zinc-50 transition-colors">
+                        <td className="px-6 py-4 font-mono text-xs text-red-500 font-bold select-all">{log.url}</td>
+                        <td className="px-6 py-4 text-xs text-zinc-500 max-w-xs truncate font-mono" title={log.referrer || 'Acesso Direto'}>
+                          {log.referrer || <span className="text-zinc-300 italic">Acesso Direto</span>}
+                        </td>
+                        <td className="px-6 py-4 font-black text-zinc-700">{log.occurrences || 1}</td>
+                        <td className="px-6 py-4 text-zinc-400">{new Date(log.updated_at || log.created_at).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRedirectFormData({ id: undefined, old_url: log.url, new_url: '', redirect_type: 301, active: true });
+                                setSeoTab('redirects');
+                                setShowRedirectForm(true);
+                              }}
+                              className="text-emerald-600 hover:text-emerald-700 text-xs font-bold uppercase tracking-widest flex items-center gap-1"
+                            >
+                              <Link2 className="w-3.5 h-3.5" /> Criar Redirect
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteNotFoundLog(log.id)}
+                              className="text-zinc-400 hover:text-red-600 text-xs font-bold uppercase tracking-widest"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={5} className="px-6 py-12 text-center text-zinc-400 text-sm font-medium">Nenhum log de erro 404 registrado. Tudo funcionando perfeitamente!</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: AUDITORIA E CHECKLIST */}
+        {seoTab === 'audit' && (
+          <div className="space-y-8 animate-fadeIn text-left">
+            {/* Audit Status Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 text-center">
+                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block">Ítens Conformidade</span>
+                <span className="text-3xl font-black text-emerald-700 mt-1 block">{audit.counts['OK'] || 0} / {audit.items.length}</span>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-6 text-center">
+                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest block">Melhorias / Sugestões</span>
+                <span className="text-3xl font-black text-amber-700 mt-1 block">{audit.counts['Atenção'] || 0}</span>
+              </div>
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-6 text-center">
+                <span className="text-[10px] font-black text-red-600 uppercase tracking-widest block">Ações Críticas Pendentes</span>
+                <span className="text-3xl font-black text-red-700 mt-1 block">{audit.counts['Erro'] || 0}</span>
+              </div>
+              <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-6 text-center">
+                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block">Pendentes de Terceiros</span>
+                <span className="text-3xl font-black text-zinc-600 mt-1 block">{audit.counts['Pendente'] || 0}</span>
+              </div>
+            </div>
+
+            {/* Checklist */}
+            <div className="bg-zinc-50 rounded-[2rem] border border-zinc-100 p-8 space-y-4">
+              <h3 className="text-lg font-bold text-zinc-900 border-b border-zinc-200 pb-2">Checklist de Rastreamento e Indexação Google</h3>
+              <div className="divide-y divide-zinc-200/60">
+                {audit.items.map((item) => (
+                  <div key={item.id} className="py-4 flex justify-between items-start gap-4 flex-wrap first:pt-0 last:pb-0">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-zinc-800 text-sm">{item.name}</span>
+                        {item.link && (
+                          <a href={item.link} target="_blank" rel="noopener noreferrer" className="p-1 text-zinc-400 hover:text-zinc-600 inline-block">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-500 font-medium leading-relaxed max-w-2xl">{item.desc}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                      item.status === 'OK' ? 'bg-emerald-100 text-emerald-700' :
+                      item.status === 'Atenção' ? 'bg-amber-100 text-amber-700' :
+                      item.status === 'Erro' ? 'bg-red-100 text-red-700' :
+                      'bg-zinc-100 text-zinc-500'
+                    }`}>
+                      {item.status === 'OK' && 'Concluído'}
+                      {item.status === 'Atenção' && 'Melhoria'}
+                      {item.status === 'Erro' && 'Ação Crítica'}
+                      {item.status === 'Pendente' && 'Pendente'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Guia Técnico */}
+            <div className="bg-zinc-950 p-8 rounded-[2rem] text-zinc-300 space-y-4 font-medium text-xs leading-relaxed">
+              <h4 className="text-white font-bold text-sm flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-400" /> Relatório SEO Profissional e Rastreamento Local</h4>
+              <p>O Vai Rifar foi otimizado com base na documentação do <b>Google Search Central</b> para maximizar o ranqueamento orgânico:</p>
+              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
+                <li><b>Prerendering Dinâmico (SEO Server-Side):</b> O servidor Express agora intercepta crawlers (Googlebot, Bingbot, card do WhatsApp) e injeta tags Meta Open Graph, Twitter Cards e scripts JSON-LD antes de servir o HTML para o cliente SPA.</li>
+                <li><b>Dados Estruturados Schema.org:</b> Ativação de tags <code className="text-zinc-200">Organization</code> e <code className="text-zinc-200">WebSite</code> na Home e <code className="text-zinc-200">Product</code> / <code className="text-zinc-200">Offer</code> na página de rifas, facilitando a exibição de Rich Snippets de produtos e preços nos resultados do Google.</li>
+                <li><b>URLs Amigáveis e Breadcrumbs:</b> Substituição das URLs antigas baseadas em parâmetros pelo formato limpo <code className="text-emerald-400">/rifa/nome-do-sorteio</code> e injeção automática de Breadcrumbs com marcação JSON-LD.</li>
+                <li><b>Sitemaps XML Automatizados:</b> Divididos por sitemap principal e submódulos específicos para rifas, páginas institucionais e categorias, atualizando em tempo real com lastmod de alteração.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout, onNavigateRoot }: { user: User, globalSettings: any, onRefreshSettings: () => void | Promise<any>, onLogout: () => void, onNavigateRoot?: (page: string) => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'settings'>('stats');
-  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'payments' | 'taxes' | 'email' | 'mercadopago'>('general');
+  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'payments' | 'taxes' | 'email' | 'mercadopago' | 'lgpd' | 'seo'>('general');
   const [localSettings, setLocalSettings] = useState<any>(globalSettings);
   const [selectedTemplate, setSelectedTemplate] = useState('order_paid');
   const [emailLogs, setEmailLogs] = useState<any[]>([]);
   const [campaignPayments, setCampaignPayments] = useState<any[]>([]);
   const [paymentsFilter, setPaymentsFilter] = useState('all');
 
+  // Estados de LGPD
+  const [consents, setConsents] = useState<any[]>([]);
+  const [lgpdRequests, setLgpdRequests] = useState<any[]>([]);
+  const [loadingConsents, setLoadingConsents] = useState(false);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+
   useEffect(() => {
     setLocalSettings(globalSettings);
   }, [globalSettings]);
+
+  const fetchLgpdData = async () => {
+    setLoadingConsents(true);
+    setLoadingRequests(true);
+    try {
+      const [consentsRes, requestsRes] = await Promise.all([
+        supabase
+          .from('user_consents')
+          .select('*, profiles:user_id(name, email)')
+          .order('created_at', { ascending: false })
+          .limit(50),
+        supabase
+          .from('lgpd_requests')
+          .select('*')
+          .order('created_at', { ascending: false })
+      ]);
+
+      if (consentsRes.data) setConsents(consentsRes.data);
+      if (requestsRes.data) setLgpdRequests(requestsRes.data);
+    } catch (err) {
+      console.error('Erro ao buscar dados de LGPD:', err);
+    } finally {
+      setLoadingConsents(false);
+      setLoadingRequests(false);
+    }
+  };
+
+  const handleUpdateLgpdRequestStatus = async (requestId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('lgpd_requests')
+        .update({ status: newStatus })
+        .eq('id', requestId);
+      if (error) throw error;
+      
+      setLgpdRequests(prev => 
+        prev.map(req => req.id === requestId ? { ...req, status: newStatus } : req)
+      );
+      alert('Status da solicitação atualizado com sucesso!');
+    } catch (err: any) {
+      alert('Erro ao atualizar status: ' + err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (settingsSubTab === 'lgpd') {
+      fetchLgpdData();
+    }
+  }, [settingsSubTab]);
 
   const fetchData = async () => {
     if (!user?.id) return;
@@ -5613,7 +6661,9 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                   { id: 'general', label: 'Geral', icon: LayoutDashboard },
                   { id: 'taxes', label: 'Taxas', icon: Ticket },
                   { id: 'email', label: 'E-mail', icon: Mail },
-                  { id: 'mercadopago', label: 'Mercado Pago', icon: CreditCard }
+                  { id: 'mercadopago', label: 'Mercado Pago', icon: CreditCard },
+                  { id: 'lgpd', label: 'LGPD e Privacidade', icon: Shield },
+                  { id: 'seo', label: 'SEO e Google', icon: Globe }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -5940,6 +6990,375 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
 
               {settingsSubTab === 'mercadopago' && (
                 <MercadoPagoSettingsPanel />
+              )}
+
+              {settingsSubTab === 'lgpd' && (
+                <div className="space-y-8 animate-fadeIn text-left">
+                  {/* 1. Status da Implementação */}
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
+                        <Shield className="w-5 h-5 text-emerald-600" /> Status da Implementação LGPD
+                      </h3>
+                      <p className="text-sm text-zinc-500 font-medium mt-1">Verifique o checklist de conformidade legal e técnica do seu site.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {[
+                        { name: 'Banner de cookies', status: 'Ativo', desc: 'Exibido para novos visitantes salvarem preferências de privacidade.' },
+                        { name: 'Política de Privacidade', status: localSettings.lgpd_privacy_policy ? 'Ativo' : 'Pendente', desc: localSettings.lgpd_privacy_policy ? 'Texto customizado ativo e dinâmico.' : 'Usando texto padrão do sistema.' },
+                        { name: 'Termos de Uso', status: localSettings.lgpd_terms_of_use ? 'Ativo' : 'Pendente', desc: localSettings.lgpd_terms_of_use ? 'Texto customizado ativo e dinâmico.' : 'Usando texto padrão do sistema.' },
+                        { name: 'Política de Cookies', status: localSettings.lgpd_cookies_policy ? 'Ativo' : 'Pendente', desc: localSettings.lgpd_cookies_policy ? 'Texto customizado ativo e dinâmico.' : 'Usando texto padrão do sistema.' },
+                        { name: 'Central de Preferências', status: 'Ativo', desc: 'Modal público para o usuário ajustar consentimento de cookies a qualquer hora.' },
+                        { name: 'Registro de consentimentos', status: 'Ativo', desc: 'Gravação em banco de dados das escolhas do titular para fins de auditoria.' },
+                        { name: 'Formulário LGPD', status: 'Ativo', desc: 'Canal de comunicação público para abertura de requisições de titulares.' },
+                        { name: 'Exclusão de conta', status: 'Ativo', desc: 'Exclusão de perfil pelo próprio usuário com exclusão e anonimização de dados.' },
+                        { name: 'Bloqueio de scripts', status: 'Ativo', desc: 'GTM, Clarity, Pixel e Analytics bloqueados antes do aceite correto.' }
+                      ].map((item, i) => (
+                        <div key={i} className="border border-zinc-100 rounded-2xl p-5 space-y-2 hover:border-zinc-200 transition-all">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-zinc-800 text-sm">{item.name}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${item.status === 'Ativo' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                              {item.status === 'Ativo' ? 'Implementado' : 'Pendente (Padrão)'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-400 font-medium leading-relaxed">{item.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Configurações editáveis */}
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-8">
+                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
+                      <FileText className="w-5 h-5 text-emerald-600" /> Documentos Legais & Controlador
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nome da Empresa/Controlador</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_controller_name || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_controller_name: e.target.value })} placeholder="Ex: Vai Rifar LTDA" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">CNPJ / CPF do Controlador</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_controller_document || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_controller_document: e.target.value })} placeholder="Ex: 00.000.000/0001-00" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">E-mail de Contato LGPD</label>
+                        <input type="email" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_contact_email || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_contact_email: e.target.value })} placeholder="Ex: dpo@vairifar.com.br" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Nome do Encarregado (DPO)</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_dpo_name || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_dpo_name: e.target.value })} placeholder="Ex: João da Silva" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Versão Atual dos Documentos</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_documents_version || '1.0.0'} onChange={e => setLocalSettings({ ...localSettings, lgpd_documents_version: e.target.value })} placeholder="Ex: 1.0.2" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Data de Vigência</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_vigency_date || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_vigency_date: e.target.value })} placeholder="Ex: 16 de Junho de 2026" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-6 text-left">
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Texto dos Termos de Uso (Suporta Markdown simples como ### e -)</label>
+                        <textarea className="w-full h-64 rounded-2xl border border-zinc-200 p-6 font-mono text-xs outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_terms_of_use || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_terms_of_use: e.target.value })} placeholder="Cole aqui os Termos de Uso..." />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Texto da Política de Privacidade (Suporta Markdown simples)</label>
+                        <textarea className="w-full h-64 rounded-2xl border border-zinc-200 p-6 font-mono text-xs outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_privacy_policy || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_privacy_policy: e.target.value })} placeholder="Cole aqui a Política de Privacidade..." />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Texto da Política de Cookies (Suporta Markdown simples)</label>
+                        <textarea className="w-full h-64 rounded-2xl border border-zinc-200 p-6 font-mono text-xs outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_cookies_policy || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_cookies_policy: e.target.value })} placeholder="Cole aqui a Política de Cookies..." />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Gestão de cookies */}
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
+                      <Cookie className="w-5 h-5 text-emerald-600" /> Categorias de Cookies Ativas
+                    </h3>
+                    <p className="text-sm text-zinc-500 font-medium">Ative ou desative as categorias de cookies opcionais no Banner e na Central de Preferências.</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-left">
+                      {/* Necessários */}
+                      <div className="border border-zinc-100 rounded-2xl p-5 flex flex-col justify-between h-40 bg-zinc-50/50">
+                        <div className="space-y-1">
+                          <span className="font-bold text-zinc-800 text-sm block">Necessários</span>
+                          <span className="text-xs text-zinc-400 font-medium leading-relaxed block">Fundamentais para o login e segurança do site.</span>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase">Sempre Ativo</span>
+                          <input type="checkbox" checked disabled className="w-5 h-5 rounded text-emerald-600 border-zinc-300" />
+                        </div>
+                      </div>
+
+                      {/* Estatísticas */}
+                      <div className="border border-zinc-100 rounded-2xl p-5 flex flex-col justify-between h-40 hover:border-zinc-200 transition-all">
+                        <div className="space-y-1">
+                          <span className="font-bold text-zinc-800 text-sm block">Estatísticas</span>
+                          <span className="text-xs text-zinc-400 font-medium leading-relaxed block">Analytics para melhorar o desempenho técnico.</span>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase">Habilitar</span>
+                          <input 
+                            type="checkbox" 
+                            className="w-5 h-5 rounded text-emerald-600 border-zinc-300 focus:ring-emerald-500 cursor-pointer" 
+                            checked={localSettings.lgpd_cookie_statistics_active !== 'false'} 
+                            onChange={e => setLocalSettings({ ...localSettings, lgpd_cookie_statistics_active: e.target.checked ? 'true' : 'false' })} 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Marketing */}
+                      <div className="border border-zinc-100 rounded-2xl p-5 flex flex-col justify-between h-40 hover:border-zinc-200 transition-all">
+                        <div className="space-y-1">
+                          <span className="font-bold text-zinc-800 text-sm block">Marketing</span>
+                          <span className="text-xs text-zinc-400 font-medium leading-relaxed block">Scripts para medir anúncios e tráfego pago.</span>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase">Habilitar</span>
+                          <input 
+                            type="checkbox" 
+                            className="w-5 h-5 rounded text-emerald-600 border-zinc-300 focus:ring-emerald-500 cursor-pointer" 
+                            checked={localSettings.lgpd_cookie_marketing_active !== 'false'} 
+                            onChange={e => setLocalSettings({ ...localSettings, lgpd_cookie_marketing_active: e.target.checked ? 'true' : 'false' })} 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Personalização */}
+                      <div className="border border-zinc-100 rounded-2xl p-5 flex flex-col justify-between h-40 hover:border-zinc-200 transition-all">
+                        <div className="space-y-1">
+                          <span className="font-bold text-zinc-800 text-sm block">Personalização</span>
+                          <span className="text-xs text-zinc-400 font-medium leading-relaxed block">Guarda preferências de layout, temas e filtros.</span>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase">Habilitar</span>
+                          <input 
+                            type="checkbox" 
+                            className="w-5 h-5 rounded text-emerald-600 border-zinc-300 focus:ring-emerald-500 cursor-pointer" 
+                            checked={localSettings.lgpd_cookie_personalization_active !== 'false'} 
+                            onChange={e => setLocalSettings({ ...localSettings, lgpd_cookie_personalization_active: e.target.checked ? 'true' : 'false' })} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. Scripts condicionais */}
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                    <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
+                      <Code className="w-5 h-5 text-emerald-600" /> Scripts Rastreamento Condicional
+                    </h3>
+                    <p className="text-sm text-zinc-500 font-medium">Os scripts abaixo só serão executados no site após o respectivo consentimento do visitante.</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Google Analytics ID</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_script_ga_id || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_script_ga_id: e.target.value })} placeholder="Ex: G-XXXXXXXXXX" />
+                        <span className="text-[10px] text-zinc-400 font-medium mt-1 block">Condicionado a: <b>Estatísticas</b>. Se vazio, usa o Analytics ID global.</span>
+                      </div>
+                      
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Google Tag Manager (GTM) ID</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_script_gtm_id || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_script_gtm_id: e.target.value })} placeholder="Ex: GTM-XXXXXXX" />
+                        <span className="text-[10px] text-zinc-400 font-medium mt-1 block">Condicionado a: <b>Marketing</b>.</span>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Meta Pixel (Facebook Pixel) ID</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_script_meta_pixel_id || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_script_meta_pixel_id: e.target.value })} placeholder="Ex: 123456789012345" />
+                        <span className="text-[10px] text-zinc-400 font-medium mt-1 block">Condicionado a: <b>Marketing</b>. Se vazio, usa o Pixel ID global.</span>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Microsoft Clarity ID</label>
+                        <input type="text" className="w-full h-14 rounded-2xl border border-zinc-200 px-6 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_script_clarity_id || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_script_clarity_id: e.target.value })} placeholder="Ex: abcde12345" />
+                        <span className="text-[10px] text-zinc-400 font-medium mt-1 block">Condicionado a: <b>Estatísticas</b>.</span>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Outros Scripts Customizados (HTML completo com tag &lt;script&gt;)</label>
+                        <textarea className="w-full h-40 rounded-2xl border border-zinc-200 p-6 font-mono text-xs outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.lgpd_custom_scripts || ''} onChange={e => setLocalSettings({ ...localSettings, lgpd_custom_scripts: e.target.value })} placeholder="Ex: <!-- Clarity --> <script>...</script>" />
+                        <span className="text-[10px] text-zinc-400 font-medium mt-1 block">Condicionado a: <b>Marketing</b>. Carrega scripts e tags HTML arbitrárias após aceite.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Registro de consentimentos (Tabela) */}
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
+                          <Eye className="w-5 h-5 text-emerald-600" /> Registro de Consentimentos (Auditoria)
+                        </h3>
+                        <p className="text-sm text-zinc-500 font-medium mt-1">Exibindo os últimos 50 consentimentos de usuários e visitantes registrados no Supabase.</p>
+                      </div>
+                      <button type="button" onClick={fetchLgpdData} disabled={loadingConsents} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
+                        <RefreshCcw className={`w-3 h-3 ${loadingConsents ? 'animate-spin' : ''}`} /> {loadingConsents ? 'Carregando...' : 'Atualizar'}
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto border border-zinc-100 rounded-2xl">
+                      <table className="w-full text-left bg-zinc-50/50">
+                        <thead>
+                          <tr className="border-b border-zinc-100 bg-zinc-50 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                            <th className="px-6 py-4">Usuário</th>
+                            <th className="px-6 py-4">Tipo</th>
+                            <th className="px-6 py-4">Versão</th>
+                            <th className="px-6 py-4">IP</th>
+                            <th className="px-6 py-4">Navegador / Agent</th>
+                            <th className="px-6 py-4">Data e Hora</th>
+                            <th className="px-6 py-4 text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 text-sm">
+                          {consents.length > 0 ? consents.map((c: any) => (
+                            <tr key={c.id} className="bg-white hover:bg-zinc-50 transition-colors">
+                              <td className="px-6 py-4 font-bold text-zinc-700">
+                                {c.profiles ? `${c.profiles.name || ''} (${c.profiles.email || ''})` : 'Visitante Anônimo'}
+                              </td>
+                              <td className="px-6 py-4 font-mono text-xs text-zinc-500">{c.consent_type}</td>
+                              <td className="px-6 py-4 text-zinc-500">{c.version || '-'}</td>
+                              <td className="px-6 py-4 text-zinc-400 font-mono text-xs">{c.ip_address || '-'}</td>
+                              <td className="px-6 py-4 text-zinc-400 text-xs max-w-xs truncate" title={c.user_agent}>
+                                {c.user_agent || '-'}
+                              </td>
+                              <td className="px-6 py-4 text-zinc-400">{new Date(c.created_at).toLocaleString()}</td>
+                              <td className="px-6 py-4 text-right">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${c.accepted ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                  {c.accepted ? 'Aceito' : 'Recusado'}
+                                </span>
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={7} className="px-6 py-12 text-center text-zinc-400 text-sm font-medium">Nenhum consentimento registrado.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* 6. Solicitações LGPD */}
+                  <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-3">
+                          <Users className="w-5 h-5 text-emerald-600" /> Solicitações dos Titulares (LGPD)
+                        </h3>
+                        <p className="text-sm text-zinc-500 font-medium mt-1">Acompanhe e atenda as requisições de privacidade enviadas pelos usuários.</p>
+                      </div>
+                      <button type="button" onClick={fetchLgpdData} disabled={loadingRequests} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
+                        <RefreshCcw className={`w-3 h-3 ${loadingRequests ? 'animate-spin' : ''}`} /> {loadingRequests ? 'Carregando...' : 'Atualizar'}
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto border border-zinc-100 rounded-2xl">
+                      <table className="w-full text-left bg-zinc-50/50">
+                        <thead>
+                          <tr className="border-b border-zinc-100 bg-zinc-50 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                            <th className="px-6 py-4">Titular</th>
+                            <th className="px-6 py-4">Tipo</th>
+                            <th className="px-6 py-4">Detalhes / Justificativa</th>
+                            <th className="px-6 py-4">Abertura</th>
+                            <th className="px-6 py-4 text-right">Status da Solicitação</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 text-sm">
+                          {lgpdRequests.length > 0 ? lgpdRequests.map((req: any) => (
+                            <tr key={req.id} className="bg-white hover:bg-zinc-50 transition-colors">
+                              <td className="px-6 py-4">
+                                <span className="font-bold text-zinc-700 block">{req.name}</span>
+                                <span className="text-xs text-zinc-400 block">{req.email}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-zinc-100 text-zinc-600">
+                                  {req.request_type === 'access' && 'Acessar dados'}
+                                  {req.request_type === 'rectify' && 'Corrigir dados'}
+                                  {req.request_type === 'delete' && 'Excluir conta'}
+                                  {req.request_type === 'revoke' && 'Revogar consentimento'}
+                                  {!['access','rectify','delete','revoke'].includes(req.request_type) && req.request_type}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-zinc-500 font-medium max-w-sm whitespace-pre-wrap">{req.details || '-'}</td>
+                              <td className="px-6 py-4 text-zinc-400">{new Date(req.created_at).toLocaleString()}</td>
+                              <td className="px-6 py-4 text-right text-zinc-900">
+                                <select 
+                                  value={req.status || 'pending'} 
+                                  onChange={e => handleUpdateLgpdRequestStatus(req.id, e.target.value)}
+                                  className={`h-9 rounded-lg border text-xs font-bold px-2.5 bg-white outline-none cursor-pointer ${
+                                    req.status === 'pending' ? 'border-amber-200 text-amber-600 focus:ring-amber-500' :
+                                    req.status === 'in_analysis' ? 'border-blue-200 text-blue-600 focus:ring-blue-500' :
+                                    req.status === 'completed' ? 'border-emerald-200 text-emerald-600 focus:ring-emerald-500' :
+                                    'border-red-200 text-red-600 focus:ring-red-500'
+                                  }`}
+                                >
+                                  <option value="pending">Pendente</option>
+                                  <option value="in_analysis">Em análise</option>
+                                  <option value="completed">Concluído</option>
+                                  <option value="rejected">Recusado justificadamente</option>
+                                </select>
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={5} className="px-6 py-12 text-center text-zinc-400 text-sm font-medium">Nenhuma solicitação aberta.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* 7. Validação técnica */}
+                  <div className="bg-zinc-950 p-10 rounded-[2.5rem] shadow-xl text-white space-y-6 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-emerald-500/10 rounded-xl"><CheckCircle2 className="w-5 h-5 text-emerald-400" /></div>
+                      <h3 className="text-xl font-bold">Relatório de Validação Técnica</h3>
+                    </div>
+                    <p className="text-sm text-zinc-400 font-medium leading-relaxed">Auditoria geral da implementação técnica e dos fluxos do portal sob a LGPD.</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 text-left">
+                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-3">
+                        <span className="text-emerald-400 text-[10px] font-black uppercase tracking-widest block">Já Estava Implementado</span>
+                        <ul className="text-xs text-zinc-300 space-y-2 list-disc pl-4 font-medium">
+                          <li>Segurança e RLS no banco Supabase</li>
+                          <li>Fluxo de exclusão de conta via painel de perfil</li>
+                          <li>Páginas de políticas estáticas padrão</li>
+                          <li>Gravação local de cookies de consentimento</li>
+                        </ul>
+                      </div>
+
+                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-3">
+                        <span className="text-sky-400 text-[10px] font-black uppercase tracking-widest block">Criado / Corrigido Agora</span>
+                        <ul className="text-xs text-zinc-300 space-y-2 list-disc pl-4 font-medium">
+                          <li>Aba administrativa centralizada LGPD</li>
+                          <li>Tabela de Auditoria de Consentimentos ativa</li>
+                          <li>Central de Triagem de solicitações LGPD</li>
+                          <li>Bloqueador condicional de scripts de terceiros antes do aceite</li>
+                          <li>Textos dinâmicos versionados com data e controlador</li>
+                        </ul>
+                      </div>
+
+                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-3">
+                        <span className="text-amber-400 text-[10px] font-black uppercase tracking-widest block">Depende de Ação Manual</span>
+                        <ul className="text-xs text-zinc-300 space-y-2 list-disc pl-4 font-medium">
+                          <li>Preencher Nome e CNPJ do controlador</li>
+                          <li>Preencher o DPO de contato no formulário</li>
+                          <li>Personalizar os termos e políticas customizadas</li>
+                          <li>Informar os IDs corretos nas integrações</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {settingsSubTab !== 'mercadopago' && (
@@ -7847,6 +9266,116 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   );
 };
 
+const NotFoundPage = ({ campaigns, onSelectCampaign, onNavigate }: { campaigns: Campaign[], onSelectCampaign: (c: Campaign) => void, onNavigate: (page: string) => void }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const activeCampaigns = campaigns.filter(c => c.status === 'active').slice(0, 3);
+
+  const filteredCampaigns = campaigns.filter(c => 
+    c.status === 'active' && 
+    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-[85vh] bg-gradient-to-b from-zinc-50 to-white flex flex-col justify-center items-center py-16 px-4">
+      <div className="max-w-xl w-full text-center space-y-8">
+        {/* Ilustração Premium 404 */}
+        <div className="relative">
+          <h1 className="text-[120px] font-black text-transparent bg-clip-text bg-gradient-to-br from-brand-orange to-brand-green leading-none select-none">404</h1>
+          <p className="text-zinc-500 font-bold uppercase tracking-[0.2em] mt-2">Página Não Encontrada</p>
+        </div>
+
+        <div className="space-y-3">
+          <h2 className="text-2xl font-black text-zinc-900">Ops! Esse link não existe ou foi removido.</h2>
+          <p className="text-zinc-500 font-medium max-w-md mx-auto">
+            Não se preocupe, você pode pesquisar pelo sorteio desejado abaixo ou dar uma olhada nas nossas campanhas ativas em destaque!
+          </p>
+        </div>
+
+        {/* Campo de Busca Inteligente */}
+        <div className="relative max-w-md mx-auto">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 w-5 h-5" />
+          <input
+            type="text"
+            className="w-full h-14 pl-12 pr-4 rounded-2xl border border-zinc-200 font-medium outline-none focus:ring-2 focus:ring-brand-orange shadow-sm bg-white text-zinc-900"
+            placeholder="Buscar sorteio por nome..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {/* Resultados de Busca ou Campanhas em Destaque */}
+        <div className="space-y-4 pt-4 text-left">
+          {searchQuery ? (
+            <div>
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Resultados da Pesquisa ({filteredCampaigns.length})</p>
+              <div className="space-y-3">
+                {filteredCampaigns.length > 0 ? (
+                  filteredCampaigns.map(c => (
+                    <div
+                      key={c.id}
+                      onClick={() => onSelectCampaign(c)}
+                      className="flex items-center gap-4 bg-white border border-zinc-100 p-4 rounded-2xl hover:shadow-md cursor-pointer transition-all hover:border-brand-orange"
+                    >
+                      <img src={c.image_url || 'https://picsum.photos/seed/default/100/100'} className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-zinc-900 text-sm truncate">{c.title}</h4>
+                        <p className="text-xs text-zinc-400 font-medium">Cota por apenas R$ {c.ticket_price.toFixed(2).replace('.', ',')}</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-zinc-400" />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-zinc-400 italic text-sm text-center py-4">Nenhum sorteio ativo encontrado.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4 text-center">Campanhas Recomendadas em Destaque</p>
+              <div className="space-y-3">
+                {activeCampaigns.length > 0 ? (
+                  activeCampaigns.map(c => (
+                    <div
+                      key={c.id}
+                      onClick={() => onSelectCampaign(c)}
+                      className="flex items-center gap-4 bg-white border border-zinc-100 p-4 rounded-2xl hover:shadow-md cursor-pointer transition-all hover:border-brand-orange"
+                    >
+                      <img src={c.image_url || 'https://picsum.photos/seed/default/100/100'} className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-zinc-900 text-sm truncate">{c.title}</h4>
+                        <p className="text-xs text-zinc-400 font-medium">Cota por apenas R$ {c.ticket_price.toFixed(2).replace('.', ',')}</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-zinc-400 animate-pulse" />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-zinc-400 italic text-sm text-center py-4">Nenhuma campanha em destaque ativa no momento.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Ações */}
+        <div className="pt-6 flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onClick={() => onNavigate('home')}
+            className="px-8 py-4 bg-brand-orange text-white rounded-2xl font-bold shadow-lg shadow-orange-100 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
+          >
+            Ir para a Home do Site
+          </button>
+          <button
+            onClick={() => onNavigate('home')}
+            className="px-8 py-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-2xl font-bold transition-all text-sm"
+          >
+            Ver Todos os Sorteios
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ResetPasswordPage = ({ onResetComplete }: { onResetComplete: () => void }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -8340,24 +9869,31 @@ const CookiePreferencesModal = ({
 
 const LGPDPolicyPage = ({ page, onNavigate, settings }: { page: string, onNavigate: (page: string) => void, settings: any }) => {
   const getPageInfo = () => {
+    const docVersion = settings?.lgpd_documents_version || '1.0.0';
+    const docVigency = settings?.lgpd_vigency_date || 'Junho de 2026';
+    const controllerName = settings?.lgpd_controller_name || 'Vai Rifar';
+    const controllerDoc = settings?.lgpd_controller_document || '';
+
+    const formattedVigency = `Versão ${docVersion} (Vigência a partir de ${docVigency})`;
+
     switch (page) {
       case 'terms-of-use':
         return {
           title: 'Termos de Uso',
           subtitle: 'Termos e Condições Gerais de Uso da Plataforma',
-          version: 'Versão 1.0.0 (Atualizado em Junho de 2026)',
-          content: `
+          version: formattedVigency,
+          content: settings?.lgpd_terms_of_use || `
 ### 1. Aceitação dos Termos
-Ao acessar e utilizar a plataforma Vai Rifar, você declara ter pelo menos 18 anos de idade e concorda expressamente com as disposições contidas nestes Termos de Uso. Se você não concorda com qualquer parte destes termos, não deve utilizar nossos serviços.
+Ao acessar e utilizar a plataforma ${controllerName}${controllerDoc ? ` (CNPJ/CPF: ${controllerDoc})` : ''}, você declara ter pelo menos 18 anos de idade e concorda expressamente com as disposições contidas nestes Termos de Uso. Se você não concorda com qualquer parte destes termos, não deve utilizar nossos serviços.
 
 ### 2. Natureza da Plataforma
-O Vai Rifar é uma plataforma SaaS (Software as a Service) que fornece ferramentas tecnológicas para criação, gerenciamento e divulgação de campanhas de sorteios online por organizadores independentes. O Vai Rifar não é organizador, intermediário ou promotor de nenhuma campanha. A responsabilidade por toda e qualquer campanha cadastrada, sua legalidade, prestação de contas, entrega de prêmios e conformidade com as legislações vigentes recai exclusivamente sobre o organizador criador da campanha.
+A plataforma é uma ferramenta tecnológica SaaS (Software as a Service) que fornece recursos para criação, gerenciamento e divulgação de campanhas de sorteios online por organizadores independentes. O controlador não é organizador, intermediário ou promotor de nenhuma campanha. A responsabilidade por toda e qualquer campanha cadastrada, sua legalidade, prestação de contas, entrega de prêmios e conformidade com as legislações vigentes recai exclusivamente sobre o organizador criador da campanha.
 
 ### 3. Cadastro do Organizador
 Para criar campanhas, o organizador deve realizar um cadastro fornecendo dados completos e verdadeiros (Nome, CPF, E-mail, Celular e Endereço). O organizador é responsável por manter a confidencialidade de sua senha e por todas as atividades que ocorram sob sua conta.
 
 ### 4. Responsabilidades do Organizador
-- Garantir que as campanhas criadas estejam em conformidade com as leis locais brasileiras relativas à distribuição de prêmios e sorteios.
+- Garantir que as campanhas criadas estejam em conformidade com as leis locais relativas à distribuição de prêmios e sorteios.
 - Realizar a entrega dos prêmios descritos de forma idônea aos vencedores.
 - Tratar os dados dos apoiadores/compradores com total sigilo e em estrita conformidade com a LGPD.
 - Não utilizar a plataforma para sorteios enganosos, ilegais ou abusivos.
@@ -8368,7 +9904,7 @@ Para criar campanhas, o organizador deve realizar um cadastro fornecendo dados c
 - Compreender que qualquer reclamação sobre a entrega do prêmio ou o sorteio deve ser direcionada unicamente ao organizador responsável.
 
 ### 6. Limitação de Responsabilidade
-O Vai Rifar não se responsabiliza por perdas financeiras, danos morais, cancelamentos, descumprimento de entrega de prêmios ou desvios de conduta de qualquer organizador ou participante. A plataforma apenas fornece o meio tecnológico de gerenciamento.
+Não nos responsabilizamos por perdas financeiras, danos morais, cancelamentos, descumprimento de entrega de prêmios ou desvios de conduta de qualquer organizador ou participante. A plataforma apenas fornece o meio tecnológico de gerenciamento.
 
 ### 7. Versionamento e Atualizações
 Estes termos podem ser atualizados periodicamente para refletir mudanças legislativas ou melhorias na plataforma. A versão atualizada entrará em vigor imediatamente após sua publicação no site.
@@ -8378,17 +9914,17 @@ Estes termos podem ser atualizados periodicamente para refletir mudanças legisl
         return {
           title: 'Política de Cookies',
           subtitle: 'Transparência sobre o uso de cookies em nossa plataforma',
-          version: 'Versão 1.0.0 (Atualizado em Junho de 2026)',
-          content: `
+          version: formattedVigency,
+          content: settings?.lgpd_cookies_policy || `
 ### 1. O que são Cookies?
 Cookies são pequenos arquivos de texto enviados e armazenados no seu navegador de internet quando você visita sites. Eles servem para lembrar de suas ações, preferências e configurações, de modo a proporcionar uma experiência de navegação mais rápida, segura e personalizada.
 
 ### 2. Como Utilizamos Cookies?
-A plataforma Vai Rifar utiliza cookies de diferentes categorias. Você tem total controle sobre os cookies não essenciais e pode alterar seus consentimentos a qualquer momento em nosso Banner ou na Central de Preferências.
+A plataforma ${controllerName} utiliza cookies de diferentes categorias. Você tem total controle sobre os cookies não essenciais e pode alterar seus consentimentos a qualquer momento em nosso Banner ou na Central de Preferências.
 
 ### 3. Categorias de Cookies Utilizados
 - **Cookies Necessários (Essenciais):** São imprescindíveis para a navegação básica, segurança e login seguro na plataforma. Sem eles, o site não funcionaria corretamente.
-- **Cookies de Estatísticas (Analíticos):** Ajudam-nos a coletar dados anônimos sobre como as páginas do site são acessadas. Usamos o Google Analytics para identificar fluxos de navegação e melhorar o desempenho técnico do sistema.
+- **Cookies de Estatísticas (Analíticos):** Ajudam-nos a coletar dados anônimos sobre como as páginas do site são acessadas. Usamos ferramentas analíticas para identificar fluxos de navegação e melhorar o desempenho técnico do sistema.
 - **Cookies de Marketing:** Permitem o carregamento de scripts para rastreamento de conversões (como o Facebook Pixel) com o objetivo de otimizar campanhas de atração de novos usuários.
 - **Cookies de Personalização:** Permitem que o sistema salve configurações visuais e preferências escolhidas por você (como o tema escuro/claro e layouts personalizados).
 
@@ -8396,7 +9932,7 @@ A plataforma Vai Rifar utiliza cookies de diferentes categorias. Você tem total
 Você pode revogar ou ajustar seu consentimento a qualquer momento no nosso site acessando a nossa Central de Preferências (clicando em "Política de Cookies" ou no link respectivo no rodapé). Alternativamente, você pode bloquear ou limpar os cookies diretamente nas configurações do seu navegador de internet.
 
 ### 5. Cookies de Terceiros
-Eventualmente, provedores de serviços terceiros (como Mercado Pago para transações financeiras e Supabase para autenticação) podem instalar cookies essenciais adicionais para concluir ações solicitadas por você (como login ou pagamento).
+Eventualmente, provedores de serviços terceiros (como gateways de pagamentos e provedores de autenticação) podem instalar cookies essenciais adicionais para concluir ações solicitadas por você (como login ou pagamento).
           `
         };
       case 'privacy-policy':
@@ -8404,10 +9940,10 @@ Eventualmente, provedores de serviços terceiros (como Mercado Pago para transa�
         return {
           title: 'Política de Privacidade',
           subtitle: 'Como protegemos seus dados pessoais de acordo com a LGPD',
-          version: 'Versão 1.0.0 (Atualizado em Junho de 2026)',
-          content: `
+          version: formattedVigency,
+          content: settings?.lgpd_privacy_policy || `
 ### 1. Compromisso com a Privacidade
-A privacidade dos seus dados pessoais é uma prioridade absoluta para o Vai Rifar. Esta Política de Privacidade descreve de forma clara e objetiva como coletamos, tratamos, armazenamos e protegemos os seus dados, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD).
+A privacidade dos seus dados pessoais é uma prioridade absoluta para a ${controllerName}. Esta Política de Privacidade descreve de forma clara e objetiva como coletamos, tratamos, armazenamos e protegemos os seus dados, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD).
 
 ### 2. Dados Coletados
 - **Para Organizadores:** Coletamos dados cadastrais completos necessários para faturamento e integridade da plataforma (Nome, CPF, E-mail, Celular, Endereço completo e informações de customização do painel).
@@ -8425,7 +9961,7 @@ Tratamos os dados para:
 ### 4. Compartilhamento de Dados
 Os seus dados pessoais **nunca** serão vendidos ou comercializados. O compartilhamento ocorre estritamente nas seguintes situações:
 - Com os organizadores das campanhas nas quais você participa, para viabilizar a identificação e entrega de prêmios.
-- Com prestadores de serviço necessários para a operação (ex: gateways de pagamento e provedor de autenticação Supabase).
+- Com prestadores de serviço necessários para a operação (ex: gateways de pagamento e provedores de autenticação).
 - Mediante obrigação legal ou ordem judicial de autoridade competente.
 
 ### 5. Seus Direitos sob a LGPD
@@ -8436,7 +9972,7 @@ Como titular dos dados, você pode exercer a qualquer momento seus direitos atra
 - Revogação de consentimentos concedidos anteriormente.
 
 ### 6. Armazenamento e Segurança
-Os dados são armazenados em servidores de nuvem altamente seguros fornecidos pelo Supabase, com criptografia em trânsito e em repouso. Implementamos rígidos controles de segurança contra acessos não autorizados.
+Os dados são armazenados em servidores de nuvem altamente seguros com criptografia em trânsito e em repouso. Implementamos rígidos controles de segurança contra acessos não autorizados.
 
 ### 7. Alterações nesta Política
 Esta política pode ser atualizada periodicamente. Sempre que houver uma alteração significativa, a data da versão no topo do documento será atualizada.
@@ -8461,7 +9997,7 @@ Esta política pode ser atualizada periodicamente. Sempre que houver uma altera�
           </span>
         </div>
 
-        <div className="prose max-w-none">
+        <div className="prose max-w-none text-left">
           {info.content.split('\n\n').map((para, i) => {
             const trimmed = para.trim();
             if (!trimmed) return null;
@@ -8480,6 +10016,27 @@ Esta política pode ser atualizada periodicamente. Sempre que houver uma altera�
             return <p key={i} className="text-sm text-zinc-600 font-medium leading-relaxed mb-4">{trimmed}</p>;
           })}
         </div>
+
+        {/* Card do Controlador e DPO */}
+        {settings && (settings.lgpd_controller_name || settings.lgpd_contact_email || settings.lgpd_dpo_name || settings.lgpd_vigency_date) && (
+          <div className="mt-8 p-6 rounded-2xl bg-zinc-50 border border-zinc-100 space-y-4 text-left">
+            <h4 className="text-xs font-bold text-zinc-800 uppercase tracking-wider">Informações de Contato & Controle de Dados</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium text-zinc-500">
+              {settings.lgpd_controller_name && (
+                <p><b>Controlador:</b> {settings.lgpd_controller_name} {settings.lgpd_controller_document ? `(CNPJ/CPF: ${settings.lgpd_controller_document})` : ''}</p>
+              )}
+              {settings.lgpd_contact_email && (
+                <p><b>E-mail de Contato:</b> {settings.lgpd_contact_email}</p>
+              )}
+              {settings.lgpd_dpo_name && (
+                <p><b>Encarregado de Proteção de Dados (DPO):</b> {settings.lgpd_dpo_name}</p>
+              )}
+              {settings.lgpd_vigency_date && (
+                <p><b>Vigência dos Termos:</b> A partir de {settings.lgpd_vigency_date}</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="border-t border-zinc-100 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-zinc-400 font-medium text-center sm:text-left">
@@ -8679,13 +10236,27 @@ export default function App() {
 
   // Inicializa o estado do histórico do navegador
   useEffect(() => {
+    const pathname = window.location.pathname;
     const urlParams = new URLSearchParams(window.location.search);
     const rifaParam = urlParams.get('rifa');
     const recoveryParam = urlParams.get('recovery');
-    if (recoveryParam) {
+    const pageParam = urlParams.get('page');
+
+    if (recoveryParam || pathname === '/reset-password') {
       window.history.replaceState({ page: 'reset-password' }, '', window.location.href);
+    } else if (pathname.startsWith('/rifa/')) {
+      const slug = pathname.substring(6);
+      window.history.replaceState({ page: 'campaign-details', rifaSlug: slug }, '', window.location.href);
+    } else if (pathname === '/politica-de-privacidade' || pageParam === 'politica-de-privacidade') {
+      window.history.replaceState({ page: 'privacy-policy' }, '', window.location.href);
+    } else if (pathname === '/termos-de-uso' || pageParam === 'termos-de-uso') {
+      window.history.replaceState({ page: 'terms-of-use' }, '', window.location.href);
+    } else if (pathname === '/politica-de-cookies' || pageParam === 'politica-de-cookies') {
+      window.history.replaceState({ page: 'cookies-policy' }, '', window.location.href);
+    } else if (pathname === '/lgpd' || pageParam === 'lgpd') {
+      window.history.replaceState({ page: 'lgpd-form' }, '', window.location.href);
     } else if (rifaParam) {
-      window.history.replaceState({ page: 'campaign-details', rifaParam }, '', window.location.href);
+      window.history.replaceState({ page: 'campaign-details', rifaSlug: rifaParam }, '', `${window.location.origin}/rifa/${rifaParam}`);
     } else {
       window.history.replaceState({ page: 'home' }, '', window.location.href);
     }
@@ -8694,41 +10265,45 @@ export default function App() {
   // Sincroniza estado do React -> URL do navegador
   useEffect(() => {
     if (page === 'campaign-details' && selectedCampaign) {
-      const newUrl = `${window.location.origin}/?rifa=${selectedCampaign.slug || selectedCampaign.id}`;
-      if (window.location.search !== `?rifa=${selectedCampaign.slug || selectedCampaign.id}`) {
-        window.history.pushState({ page, campaignId: selectedCampaign.id }, '', newUrl);
+      const newUrl = `${window.location.origin}/rifa/${selectedCampaign.slug || selectedCampaign.id}`;
+      if (window.location.pathname !== `/rifa/${selectedCampaign.slug || selectedCampaign.id}`) {
+        window.history.pushState({ page, campaignId: selectedCampaign.id, rifaSlug: selectedCampaign.slug }, '', newUrl);
       }
     } else if (page === 'home') {
-      if (window.location.search) {
+      if (window.location.pathname !== '/') {
         window.history.pushState({ page }, '', window.location.origin + '/');
       }
     } else if (page === 'login') {
-      if (window.location.search || window.location.pathname !== '/') {
-        window.history.pushState({ page }, '', window.location.origin + '/');
+      if (window.location.pathname !== '/login') {
+        window.history.pushState({ page }, '', window.location.origin + '/login');
       }
     } else if (page === 'reset-password') {
-      if (window.location.search !== '?recovery=true') {
-        window.history.pushState({ page }, '', window.location.origin + '/?recovery=true');
+      if (window.location.pathname !== '/reset-password') {
+        window.history.pushState({ page }, '', window.location.origin + '/reset-password');
       }
     } else if (page === 'dashboard') {
-      if (window.location.search || window.location.pathname !== '/') {
-        window.history.pushState({ page }, '', window.location.origin + '/');
+      if (window.location.pathname !== '/dashboard') {
+        window.history.pushState({ page }, '', window.location.origin + '/dashboard');
       }
     } else if (page === 'privacy-policy') {
-      if (window.location.search !== '?page=politica-de-privacidade') {
-        window.history.pushState({ page }, '', window.location.origin + '/?page=politica-de-privacidade');
+      if (window.location.pathname !== '/politica-de-privacidade') {
+        window.history.pushState({ page }, '', window.location.origin + '/politica-de-privacidade');
       }
     } else if (page === 'terms-of-use') {
-      if (window.location.search !== '?page=termos-de-uso') {
-        window.history.pushState({ page }, '', window.location.origin + '/?page=termos-de-uso');
+      if (window.location.pathname !== '/termos-de-uso') {
+        window.history.pushState({ page }, '', window.location.origin + '/termos-de-uso');
       }
     } else if (page === 'cookies-policy') {
-      if (window.location.search !== '?page=politica-de-cookies') {
-        window.history.pushState({ page }, '', window.location.origin + '/?page=politica-de-cookies');
+      if (window.location.pathname !== '/politica-de-cookies') {
+        window.history.pushState({ page }, '', window.location.origin + '/politica-de-cookies');
       }
     } else if (page === 'lgpd-form') {
-      if (window.location.search !== '?page=lgpd') {
-        window.history.pushState({ page }, '', window.location.origin + '/?page=lgpd');
+      if (window.location.pathname !== '/lgpd') {
+        window.history.pushState({ page }, '', window.location.origin + '/lgpd');
+      }
+    } else if (page === 'not-found') {
+      if (window.location.pathname !== '/404') {
+        window.history.pushState({ page }, '', window.location.origin + '/404');
       }
     }
   }, [page, selectedCampaign]);
@@ -8741,23 +10316,36 @@ export default function App() {
         if (state.page) {
           setPage(state.page);
         }
-        if (state.campaignId && campaigns.length > 0) {
-          const found = campaigns.find(c => c.id === state.campaignId);
-          if (found) {
-            setSelectedCampaign(found);
+        if (state.page === 'campaign-details') {
+          if (state.campaignId && campaigns.length > 0) {
+            const found = campaigns.find(c => c.id === state.campaignId);
+            if (found) setSelectedCampaign(found);
+          } else if (state.rifaSlug && campaigns.length > 0) {
+            const found = campaigns.find(c => String(c.slug) === state.rifaSlug || String(c.id) === state.rifaSlug);
+            if (found) setSelectedCampaign(found);
           }
         } else {
           setSelectedCampaign(null);
         }
       } else {
+        const pathname = window.location.pathname;
         const urlParams = new URLSearchParams(window.location.search);
         const rifaParam = urlParams.get('rifa');
         const recoveryParam = urlParams.get('recovery');
         const pageParam = urlParams.get('page');
         
-        if (recoveryParam) {
+        if (recoveryParam || pathname === '/reset-password') {
           setPage('reset-password');
           return;
+        }
+        if (pathname.startsWith('/rifa/') && campaigns.length > 0) {
+          const slug = pathname.substring(6);
+          const found = campaigns.find(c => String(c.slug) === slug || String(c.id) === slug);
+          if (found) {
+            setSelectedCampaign(found);
+            setPage('campaign-details');
+            return;
+          }
         }
         if (rifaParam && campaigns.length > 0) {
           const found = campaigns.find(c => String(c.slug) === rifaParam || String(c.id) === rifaParam);
@@ -8767,10 +10355,12 @@ export default function App() {
             return;
           }
         }
-        if (pageParam === 'politica-de-privacidade') { setPage('privacy-policy'); return; }
-        if (pageParam === 'termos-de-uso') { setPage('terms-of-use'); return; }
-        if (pageParam === 'politica-de-cookies') { setPage('cookies-policy'); return; }
-        if (pageParam === 'lgpd') { setPage('lgpd-form'); return; }
+        if (pathname === '/politica-de-privacidade' || pageParam === 'politica-de-privacidade') { setPage('privacy-policy'); return; }
+        if (pathname === '/termos-de-uso' || pageParam === 'termos-de-uso') { setPage('terms-of-use'); return; }
+        if (pathname === '/politica-de-cookies' || pageParam === 'politica-de-cookies') { setPage('cookies-policy'); return; }
+        if (pathname === '/lgpd' || pageParam === 'lgpd') { setPage('lgpd-form'); return; }
+        if (pathname === '/login') { setPage('login'); return; }
+        if (pathname === '/dashboard') { setPage('dashboard'); return; }
 
         setPage('home');
         setSelectedCampaign(null);
@@ -8870,29 +10460,47 @@ export default function App() {
           setCampaigns(updatedCampaigns);
         }
 
-        // Verificar parâmetro "rifa", "recovery" e "page" na URL
+        // Verificar parâmetro ou caminho de URL na inicialização
+        const pathname = window.location.pathname;
         const urlParams = new URLSearchParams(window.location.search);
         const rifaParam = urlParams.get('rifa');
         const recoveryParam = urlParams.get('recovery');
         const pageParam = urlParams.get('page');
         let selected: Campaign | undefined;
         
-        if (recoveryParam) {
+        if (recoveryParam || pathname === '/reset-password') {
           setPage('reset-password');
+        } else if (pathname.startsWith('/rifa/')) {
+          const slug = pathname.substring(6);
+          selected = updatedCampaigns.find(c => String(c.slug) === slug || String(c.id) === slug);
+          if (selected) {
+            setSelectedCampaign(selected);
+            setPage('campaign-details');
+          } else {
+            setPage('not-found');
+          }
         } else if (rifaParam && updatedCampaigns.length > 0) {
           selected = updatedCampaigns.find(c => String(c.slug) === rifaParam || String(c.id) === rifaParam);
           if (selected) {
             setSelectedCampaign(selected);
             setPage('campaign-details');
+          } else {
+            setPage('not-found');
           }
-        } else if (pageParam === 'politica-de-privacidade') {
+        } else if (pathname === '/politica-de-privacidade' || pageParam === 'politica-de-privacidade') {
           setPage('privacy-policy');
-        } else if (pageParam === 'termos-de-uso') {
+        } else if (pathname === '/termos-de-uso' || pageParam === 'termos-de-uso') {
           setPage('terms-of-use');
-        } else if (pageParam === 'politica-de-cookies') {
+        } else if (pathname === '/politica-de-cookies' || pageParam === 'politica-de-cookies') {
           setPage('cookies-policy');
-        } else if (pageParam === 'lgpd') {
+        } else if (pathname === '/lgpd' || pageParam === 'lgpd') {
           setPage('lgpd-form');
+        } else if (pathname === '/login') {
+          setPage('login');
+        } else if (pathname === '/dashboard') {
+          setPage('dashboard');
+        } else if (pathname !== '/' && pathname !== '') {
+          setPage('not-found');
         }
 
         // Processar Sessão
@@ -9064,6 +10672,11 @@ export default function App() {
           {page === 'lgpd-form' && (
             <motion.div key="lgpd-form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <LGPDFormPage onNavigate={setPage} settings={settings} />
+            </motion.div>
+          )}
+          {page === 'not-found' && (
+            <motion.div key="not-found" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <NotFoundPage campaigns={campaigns} onSelectCampaign={handleSelectCampaign} onNavigate={setPage} />
             </motion.div>
           )}
         </AnimatePresence>

@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -277,6 +278,403 @@ export async function createApp(options: AppOptions = {}) {
     next();
   });
 
+  // Middleware global de Redirecionamentos SEO
+  app.use(async (req, res, next) => {
+    if (req.method !== "GET" || req.url.startsWith("/api") || req.url.includes(".")) {
+      return next();
+    }
+    try {
+      const { data: redirect, error } = await supabase
+        .from("seo_redirects")
+        .select("*")
+        .eq("old_url", req.url)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (!error && redirect) {
+        // Incrementa cliques de forma assíncrona
+        supabase
+          .from("seo_redirects")
+          .update({ clicks: (redirect.clicks || 0) + 1 })
+          .eq("id", redirect.id)
+          .then();
+
+        console.log(`[SEO REDIRECT] ${redirect.redirect_type} from ${req.url} to ${redirect.new_url}`);
+        return res.redirect(redirect.redirect_type || 301, redirect.new_url);
+      }
+    } catch (e) {
+      console.error("Erro no middleware de redirecionamentos:", e);
+    }
+    next();
+  });
+
+  // Função auxiliar para servir HTML com metadados SEO
+  async function serveWithSeo(req: express.Request, res: express.Response, next: express.NextFunction, type: "home" | "rifa" | "page") {
+    try {
+      let htmlPath = "";
+      if (process.env.NODE_ENV === "production") {
+        htmlPath = path.join(__dirname, "dist", "index.html");
+      } else {
+        htmlPath = path.join(process.cwd(), "index.html");
+      }
+
+      let html = "";
+      try {
+        html = await fs.promises.readFile(htmlPath, "utf8");
+      } catch (err) {
+        console.error("Erro ao ler index.html:", err);
+        return next();
+      }
+
+      // Buscar configurações globais
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settings: Record<string, string> = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      // Inicializar variáveis de SEO
+      let title = settings.seo_title_default || settings.site_name || "VaiRifar - Sorteios Online";
+      let description = settings.seo_description_default || settings.site_description || "Plataforma de rifas e sorteios online.";
+      let keywords = settings.seo_keywords_default || "rifa, sorteio, online";
+      let robots = "index, follow";
+      const siteUrl = settings.seo_site_url || `${req.protocol}://${req.get('host')}`;
+      let canonicalUrl = `${siteUrl}${req.path}`;
+      let ogImage = settings.seo_share_image || settings.site_logo_url || "";
+      let ogType = "website";
+      let ogTitle = title;
+      let ogDescription = description;
+      
+      let jsonLd: any = {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": settings.seo_site_name || settings.site_name || "VaiRifar",
+        "url": siteUrl
+      };
+
+      if (type === "home") {
+        jsonLd.potentialAction = {
+          "@type": "SearchAction",
+          "target": `${siteUrl}/?search={search_term_string}`,
+          "query-input": "required name=search_term_string"
+        };
+      }
+
+      if (type === "rifa") {
+        const slug = req.params.slug;
+        const { data: campaign, error: campErr } = await supabase
+          .from("campaigns")
+          .select("*, profiles:organizer_id(name)")
+          .eq("slug", slug)
+          .maybeSingle();
+
+        if (campErr || !campaign) {
+          const referrer = req.headers.referer || "";
+          
+          try {
+            const { data: existing } = await supabase
+              .from("seo_notfound_logs")
+              .select("id, occurrences")
+              .eq("url", req.url)
+              .eq("referrer", referrer)
+              .maybeSingle();
+            if (existing) {
+              await supabase
+                .from("seo_notfound_logs")
+                .update({ occurrences: (existing.occurrences || 1) + 1, updated_at: new Date().toISOString() })
+                .eq("id", existing.id);
+            } else {
+              await supabase
+                .from("seo_notfound_logs")
+                .insert([{ url: req.url, referrer, occurrences: 1 }]);
+            }
+          } catch (err2) {
+            console.error("Erro ao gravar log 404:", err2);
+          }
+
+          title = `Página Não Encontrada | ${settings.site_name || "VaiRifar"}`;
+          description = "A página que você tentou acessar não foi localizada.";
+          robots = "noindex, nofollow";
+          ogTitle = title;
+          ogDescription = description;
+          ogType = "website";
+          jsonLd = {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            "name": title,
+            "description": description
+          };
+        } else {
+          const seo = campaign.seo_settings || {};
+          title = seo.title_seo || `${campaign.title} - Rifas Online`;
+          description = seo.description_seo || campaign.description || "Participe da nossa campanha online!";
+          keywords = seo.keyword_main ? `${seo.keyword_main}, ${seo.keywords_related || ""}` : keywords;
+          robots = seo.index_status === "noindex" ? "noindex, follow" : "index, follow";
+          canonicalUrl = seo.canonical_url || `${siteUrl}/rifa/${campaign.slug}`;
+          ogImage = seo.image_seo || campaign.image_url || ogImage;
+          ogType = "product";
+          ogTitle = title;
+          ogDescription = description;
+
+          jsonLd = {
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": campaign.title,
+            "image": campaign.image_url || "",
+            "description": campaign.description || "",
+            "sku": `RIFA-${campaign.id}`,
+            "offers": {
+              "@type": "Offer",
+              "price": campaign.ticket_price || 0,
+              "priceCurrency": "BRL",
+              "availability": campaign.status === "active" ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+              "url": canonicalUrl,
+              "seller": {
+                "@type": "Person",
+                "name": campaign.profiles?.name || "Organizador"
+              }
+            }
+          };
+        }
+      } else if (type === "page") {
+        const pageSlug = req.path.replace("/", "");
+        title = `${pageSlug.split('-').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} | ${settings.site_name || "VaiRifar"}`;
+        ogTitle = title;
+        
+        jsonLd = {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": title,
+          "url": canonicalUrl
+        };
+      }
+
+      let googleVerification = "";
+      if (settings.google_search_console_tag) {
+        if (settings.google_search_console_tag.includes("<meta")) {
+          googleVerification = settings.google_search_console_tag;
+        } else {
+          googleVerification = `<meta name="google-site-verification" content="${settings.google_search_console_tag}" />`;
+        }
+      }
+
+      const seoTags = `
+    <title>${title}</title>
+    <meta name="description" content="${description.substring(0, 160)}" />
+    <meta name="keywords" content="${keywords}" />
+    <meta name="robots" content="${robots}" />
+    <link rel="canonical" href="${canonicalUrl}" />
+    ${googleVerification}
+    <!-- Open Graph -->
+    <meta property="og:title" content="${ogTitle}" />
+    <meta property="og:description" content="${ogDescription.substring(0, 160)}" />
+    <meta property="og:image" content="${ogImage}" />
+    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:type" content="${ogType}" />
+    <meta property="og:site_name" content="${settings.seo_site_name || settings.site_name || "VaiRifar"}" />
+    <meta property="og:locale" content="pt_BR" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${ogTitle}" />
+    <meta name="twitter:description" content="${ogDescription.substring(0, 160)}" />
+    <meta name="twitter:image" content="${ogImage}" />
+    <!-- JSON-LD -->
+    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+      `;
+
+      html = html.replace(/<title>.*?<\/title>/, seoTags);
+
+      res.type("text/html");
+      res.send(html);
+    } catch (err) {
+      console.error("Erro na renderização de SEO:", err);
+      next();
+    }
+  }
+
+  // --- ROBOTS AND SITEMAP ROUTES ---
+
+  app.get("/robots.txt", async (req, res) => {
+    try {
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settingsMap = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      const customRobots = settingsMap.seo_robots_txt;
+      if (customRobots) {
+        res.type("text/plain");
+        return res.send(customRobots);
+      }
+
+      const siteUrl = settingsMap.seo_site_url || `${req.protocol}://${req.get('host')}`;
+      const defaultRobots = `User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /checkout
+Sitemap: ${siteUrl}/sitemap.xml`;
+
+      res.type("text/plain");
+      res.send(defaultRobots);
+    } catch (err) {
+      res.status(500).send("Error generating robots.txt");
+    }
+  });
+
+  app.get("/sitemap.xml", async (req, res) => {
+    try {
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settingsMap = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      const siteUrl = settingsMap.seo_site_url || `${req.protocol}://${req.get('host')}`;
+      
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${siteUrl}/sitemap-pages.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>${siteUrl}/sitemap-rifas.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>${siteUrl}/sitemap-categorias.xml</loc>
+  </sitemap>
+</sitemapindex>`;
+
+      res.type("application/xml");
+      res.send(xml);
+    } catch (e) {
+      res.status(500).send("Error generating sitemap index");
+    }
+  });
+
+  app.get("/sitemap-pages.xml", async (req, res) => {
+    try {
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settingsMap = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      const siteUrl = settingsMap.seo_site_url || `${req.protocol}://${req.get('host')}`;
+      
+      const pages = [
+        { path: "/", priority: "1.0", freq: "daily" },
+        { path: "/politica-de-privacidade", priority: "0.5", freq: "monthly" },
+        { path: "/termos-de-uso", priority: "0.5", freq: "monthly" },
+        { path: "/politica-de-cookies", priority: "0.5", freq: "monthly" },
+        { path: "/lgpd", priority: "0.5", freq: "monthly" },
+        { path: "/resultados", priority: "0.8", freq: "daily" },
+        { path: "/ganhadores", priority: "0.8", freq: "daily" }
+      ];
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  ${pages.map(p => `
+  <url>
+    <loc>${siteUrl}${p.path}</loc>
+    <changefreq>${p.freq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`).join("")}
+</urlset>`;
+
+      res.type("application/xml");
+      res.send(xml);
+    } catch (e) {
+      res.status(500).send("Error generating pages sitemap");
+    }
+  });
+
+  app.get("/sitemap-rifas.xml", async (req, res) => {
+    try {
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settingsMap = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      const siteUrl = settingsMap.seo_site_url || `${req.protocol}://${req.get('host')}`;
+
+      const { data: campaigns } = await supabase
+        .from("campaigns")
+        .select("slug, updated_at")
+        .in("status", ["active", "closed", "drawn"]);
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  ${(campaigns || []).map(c => `
+  <url>
+    <loc>${siteUrl}/rifa/${c.slug}</loc>
+    <lastmod>${new Date(c.updated_at).toISOString()}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>`).join("")}
+</urlset>`;
+
+      res.type("application/xml");
+      res.send(xml);
+    } catch (e) {
+      res.status(500).send("Error generating campaigns sitemap");
+    }
+  });
+
+  app.get("/sitemap-categorias.xml", async (req, res) => {
+    try {
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settingsMap = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      const siteUrl = settingsMap.seo_site_url || `${req.protocol}://${req.get('host')}`;
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${siteUrl}/categoria/geral</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+</urlset>`;
+
+      res.type("application/xml");
+      res.send(xml);
+    } catch (e) {
+      res.status(500).send("Error generating categories sitemap");
+    }
+  });
+
+  // --- PRERENDERING SEO ROUTING ---
+
+  app.get("/", async (req, res, next) => {
+    if (req.url.startsWith("/api") || req.url.includes(".")) return next();
+    return serveWithSeo(req, res, next, "home");
+  });
+
+  app.get("/rifa/:slug", async (req, res, next) => {
+    return serveWithSeo(req, res, next, "rifa");
+  });
+
+  const staticSeoPages = [
+    "/politica-de-privacidade",
+    "/termos-de-uso",
+    "/politica-de-cookies",
+    "/lgpd",
+    "/resultados",
+    "/ganhadores"
+  ];
+  staticSeoPages.forEach(route => {
+    app.get(route, async (req, res, next) => {
+      return serveWithSeo(req, res, next, "page");
+    });
+  });
+
   // --- API ROUTES ---
 
   app.get("/api/health", (req, res) => {
@@ -339,6 +737,149 @@ export async function createApp(options: AppOptions = {}) {
       res.json({ success: true, message: "Configuracoes atualizadas com sucesso." });
     } catch (err: any) {
       adminLog("settings", "save", "error", "Erro inesperado ao salvar configuracoes globais.", err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // --- SEO ADMIN ENDPOINTS ---
+
+  app.get("/api/admin/seo/redirects", validateAdmin, async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from("seo_redirects")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        adminLog("seo", "load-redirects", "error", "Falha ao carregar redirecionamentos.", error);
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      res.json({ success: true, redirects: data || [] });
+    } catch (err: any) {
+      adminLog("seo", "load-redirects", "error", "Erro inesperado ao carregar redirecionamentos.", err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post("/api/admin/seo/redirects", validateAdmin, async (req, res) => {
+    try {
+      const { id, old_url, new_url, redirect_type, active } = req.body;
+
+      if (!old_url || !new_url) {
+        return res.status(400).json({ success: false, message: "URL antiga e nova são obrigatórias." });
+      }
+
+      const payload = {
+        old_url,
+        new_url,
+        redirect_type: Number(redirect_type) === 302 ? 302 : 301,
+        active: active ?? true,
+        updated_at: new Date().toISOString()
+      };
+
+      let result;
+      if (id) {
+        result = await supabase
+          .from("seo_redirects")
+          .update(payload)
+          .eq("id", id);
+      } else {
+        result = await supabase
+          .from("seo_redirects")
+          .insert([{ ...payload, clicks: 0, created_at: new Date().toISOString() }]);
+      }
+
+      if (result.error) {
+        adminLog("seo", "save-redirect", "error", "Falha ao salvar redirecionamento.", result.error);
+        return res.status(400).json({ success: false, message: result.error.message });
+      }
+
+      adminLog("seo", "save-redirect", "success", `Redirecionamento salvo: ${old_url} -> ${new_url}`);
+      res.json({ success: true, message: "Redirecionamento salvo com sucesso." });
+    } catch (err: any) {
+      adminLog("seo", "save-redirect", "error", "Erro inesperado ao salvar redirecionamento.", err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/seo/redirects/:id", validateAdmin, async (req, res) => {
+    try {
+      const id = req.params.id;
+      const { error } = await supabase
+        .from("seo_redirects")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        adminLog("seo", "delete-redirect", "error", `Falha ao excluir redirecionamento ${id}`, error);
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      adminLog("seo", "delete-redirect", "success", `Redirecionamento ${id} excluído.`);
+      res.json({ success: true, message: "Redirecionamento excluído com sucesso." });
+    } catch (err: any) {
+      adminLog("seo", "delete-redirect", "error", `Erro inesperado ao excluir redirecionamento ${req.params.id}`, err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get("/api/admin/seo/notfound-logs", validateAdmin, async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from("seo_notfound_logs")
+        .select("*")
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        adminLog("seo", "load-notfound-logs", "error", "Falha ao carregar logs de 404.", error);
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      res.json({ success: true, logs: data || [] });
+    } catch (err: any) {
+      adminLog("seo", "load-notfound-logs", "error", "Erro inesperado ao carregar logs de 404.", err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/seo/notfound-logs/:id", validateAdmin, async (req, res) => {
+    try {
+      const id = req.params.id;
+      const { error } = await supabase
+        .from("seo_notfound_logs")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        adminLog("seo", "delete-notfound-log", "error", `Falha ao excluir log 404 ${id}`, error);
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      adminLog("seo", "delete-notfound-log", "success", `Log 404 ${id} excluído.`);
+      res.json({ success: true, message: "Log 404 excluído com sucesso." });
+    } catch (err: any) {
+      adminLog("seo", "delete-notfound-log", "error", `Erro inesperado ao excluir log 404 ${req.params.id}`, err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/seo/notfound-logs", validateAdmin, async (req, res) => {
+    try {
+      const { error } = await supabase
+        .from("seo_notfound_logs")
+        .delete()
+        .neq("id", 0); // Deleta todos
+
+      if (error) {
+        adminLog("seo", "clear-notfound-logs", "error", "Falha ao limpar logs de 404.", error);
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      adminLog("seo", "clear-notfound-logs", "success", "Todos os logs de 404 foram limpos.");
+      res.json({ success: true, message: "Todos os logs foram limpos com sucesso." });
+    } catch (err: any) {
+      adminLog("seo", "clear-notfound-logs", "error", "Erro inesperado ao limpar logs de 404.", err);
       res.status(500).json({ success: false, message: err.message });
     }
   });
