@@ -5946,7 +5946,7 @@ const SeoSettingsPanel = ({ globalSettings, onRefreshSettings, user }: { globalS
                 </div>
                 <div>
                   <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Favicon (URL do ícone do navegador)</label>
-                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_favicon_url || ''} onChange={e => setLocalSettings({ ...localSettings, seo_favicon_url: e.target.value })} placeholder="Ex: https://dominio.com/favicon.ico" />
+                  <input type="text" className="w-full h-12 rounded-xl border border-zinc-200 px-4 font-medium outline-none focus:ring-2 focus:ring-emerald-500" value={localSettings.seo_favicon_url || ''} onChange={e => setLocalSettings({ ...localSettings, seo_favicon_url: e.target.value, site_favicon_url: e.target.value })} placeholder="Ex: https://dominio.com/favicon.ico" />
                 </div>
               </div>
             </div>
@@ -6717,6 +6717,33 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
                             }} />
                             <button type="button" onClick={() => document.getElementById('logo-upload-admin')?.click()} className="px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
                               <Upload className="w-4 h-4" /> Enviar Logo
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Favicon do Site</label>
+                          <div className="flex items-center gap-4">
+                            {localSettings.site_favicon_url || localSettings.seo_favicon_url ? (
+                              <img src={localSettings.site_favicon_url || localSettings.seo_favicon_url} alt="Favicon" className="w-14 h-14 object-contain rounded-xl border border-zinc-100 p-2" />
+                            ) : (
+                              <div className="w-14 h-14 bg-zinc-100 rounded-2xl flex items-center justify-center"><ImageIcon className="w-6 h-6 text-zinc-300" /></div>
+                            )}
+                            <input type="file" id="favicon-upload-admin" className="hidden" accept="image/*" onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 200000) { alert('A imagem do favicon deve ter no máximo 200KB.'); return; }
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                setLocalSettings({
+                                  ...localSettings,
+                                  site_favicon_url: reader.result as string,
+                                  seo_favicon_url: reader.result as string
+                                });
+                              };
+                              reader.readAsDataURL(file);
+                            }} />
+                            <button type="button" onClick={() => document.getElementById('favicon-upload-admin')?.click()} className="px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2">
+                              <Upload className="w-4 h-4" /> Enviar Favicon
                             </button>
                           </div>
                         </div>
@@ -10581,6 +10608,17 @@ export default function App() {
       let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
       if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); }
       link.href = settings.seo_canonical_url;
+    }
+    // Favicon
+    const faviconUrl = settings.site_favicon_url || settings.seo_favicon_url;
+    if (faviconUrl) {
+      let link = document.querySelector('link[rel*="icon"]') as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'shortcut icon';
+        document.head.appendChild(link);
+      }
+      link.href = faviconUrl;
     }
     // Carregar Analytics e Pixel de acordo com os consentimentos de cookies
     try {

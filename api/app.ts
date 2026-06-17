@@ -458,12 +458,17 @@ export async function createApp(options: AppOptions = {}) {
         }
       }
 
+      const faviconUrl = settings.site_favicon_url || settings.seo_favicon_url || "";
+      const faviconTags = faviconUrl ? `
+    <link rel="icon" href="${faviconUrl}" />
+    <link rel="shortcut icon" href="${faviconUrl}" />` : "";
+
       const seoTags = `
     <title>${title}</title>
     <meta name="description" content="${description.substring(0, 160)}" />
     <meta name="keywords" content="${keywords}" />
     <meta name="robots" content="${robots}" />
-    <link rel="canonical" href="${canonicalUrl}" />
+    <link rel="canonical" href="${canonicalUrl}" />${faviconTags}
     ${googleVerification}
     <!-- Open Graph -->
     <meta property="og:title" content="${ogTitle}" />
