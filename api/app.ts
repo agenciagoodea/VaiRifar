@@ -661,15 +661,25 @@ Sitemap: ${siteUrl}/sitemap.xml`;
         .select("slug, updated_at")
         .in("status", ["active", "closed", "drawn"]);
 
-      const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  ${(campaigns || []).map(c => `
+      const campaignUrls = (campaigns || []).map(c => `
   <url>
     <loc>${siteUrl}/rifa/${c.slug}</loc>
     <lastmod>${new Date(c.updated_at).toISOString()}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
-  </url>`).join("")}
+  </url>`).join("");
+
+      // Fallback: Google Search Console requires at least one <url> tag inside <urlset>
+      const xmlUrls = campaignUrls || `
+  <url>
+    <loc>${siteUrl}/</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>`;
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  ${xmlUrls}
 </urlset>`;
 
       res.type("application/xml");
