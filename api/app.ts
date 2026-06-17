@@ -329,17 +329,32 @@ export async function createApp(options: AppOptions = {}) {
   async function serveWithSeo(req: express.Request, res: express.Response, next: express.NextFunction, type: "home" | "rifa" | "page") {
     try {
       let htmlPath = "";
-      if (process.env.NODE_ENV === "production") {
-        htmlPath = path.join(__dirname, "dist", "index.html");
-      } else {
-        htmlPath = path.join(process.cwd(), "index.html");
+      const pathsToTry = [
+        path.join(process.cwd(), "dist", "index.html"),
+        path.join(process.cwd(), "index.html"),
+        path.join(__dirname, "dist", "index.html"),
+        path.join(__dirname, "index.html"),
+        path.join(__dirname, "..", "dist", "index.html"),
+        path.join(__dirname, "..", "index.html")
+      ];
+
+      for (const p of pathsToTry) {
+        if (fs.existsSync(p)) {
+          htmlPath = p;
+          break;
+        }
+      }
+
+      if (!htmlPath) {
+        console.error("Erro: Nenhum arquivo index.html encontrado nos caminhos tentados.");
+        return next();
       }
 
       let html = "";
       try {
         html = await fs.promises.readFile(htmlPath, "utf8");
       } catch (err) {
-        console.error("Erro ao ler index.html:", err);
+        console.error(`Erro ao ler index.html em ${htmlPath}:`, err);
         return next();
       }
 

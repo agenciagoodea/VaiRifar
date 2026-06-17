@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "dist/index.html"
+    },
+    "api/[...path].ts": {
+      "includeFiles": "dist/index.html"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/:path*",

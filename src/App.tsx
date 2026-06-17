@@ -17,6 +17,7 @@ import {
   CreditCard,
   QrCode,
   Menu,
+  Map,
   X,
   Mail,
   Settings as SettingsIcon,
@@ -5911,11 +5912,53 @@ const SeoSettingsPanel = ({ globalSettings, onRefreshSettings, user }: { globalS
           ))}
         </div>
       </div>
-
       <div className="p-8">
         {/* TAB 1: SETTINGS */}
         {seoTab === 'settings' && (
           <form onSubmit={handleSaveGlobalSeo} className="space-y-8 animate-fadeIn">
+            {/* Sitemap & Robots.txt Links */}
+            <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-8 space-y-4">
+              <div>
+                <h4 className="font-bold text-zinc-900 text-sm flex items-center gap-2">
+                  <Map className="w-4 h-4 text-emerald-600 animate-bounce" /> Sitemaps e Indexação
+                </h4>
+                <p className="text-xs text-zinc-500 font-medium mt-1">O sistema gera automaticamente arquivos XML e robots.txt dinâmicos. Envie os links abaixo no seu Google Search Console para acelerar a indexação das suas páginas e rifas.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  { name: "Sitemap Principal", url: localSettings.seo_site_url ? `${localSettings.seo_site_url}/sitemap.xml` : "/sitemap.xml", desc: "Indexa todos os outros sitemaps." },
+                  { name: "Sitemap de Rifas", url: localSettings.seo_site_url ? `${localSettings.seo_site_url}/sitemap-rifas.xml` : "/sitemap-rifas.xml", desc: "Contém todas as campanhas ativas." },
+                  { name: "Sitemap de Páginas", url: localSettings.seo_site_url ? `${localSettings.seo_site_url}/sitemap-pages.xml` : "/sitemap-pages.xml", desc: "Páginas institucionais e LGPD." },
+                  { name: "Sitemap de Categorias", url: localSettings.seo_site_url ? `${localSettings.seo_site_url}/sitemap-categorias.xml` : "/sitemap-categorias.xml", desc: "Categorias gerais de sorteios." },
+                  { name: "Arquivo Robots.txt", url: localSettings.seo_site_url ? `${localSettings.seo_site_url}/robots.txt` : "/robots.txt", desc: "Instruções para os robôs de busca." }
+                ].map((item, index) => (
+                  <div key={index} className="bg-white border border-zinc-100 rounded-2xl p-4 flex flex-col justify-between space-y-2">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{item.name}</span>
+                      <p className="text-xs text-zinc-500 font-medium leading-relaxed">{item.desc}</p>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-50">
+                      <a href={localSettings.seo_site_url ? item.url : "#"} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] font-bold text-emerald-600 truncate hover:underline" title="Clique para abrir">
+                        {localSettings.seo_site_url ? item.url : "URL pendente"}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const fullUrl = localSettings.seo_site_url ? item.url : `${window.location.origin}${item.url}`;
+                          navigator.clipboard.writeText(fullUrl);
+                          alert('Link copiado!');
+                        }}
+                        className="p-1 hover:bg-zinc-100 rounded text-zinc-400 hover:text-zinc-600"
+                        title="Copiar Link"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* SEO Base */}
             <div className="space-y-6">
               <h3 className="text-lg font-bold text-zinc-800 border-b border-zinc-50 pb-2">Metadados Globais Padrão (Fallback)</h3>
