@@ -509,7 +509,7 @@ export async function createApp(options: AppOptions = {}) {
 
       let googleVerification = "";
       if (settings.google_search_console_tag) {
-        if (settings.google_search_console_tag.includes("<meta")) {
+        if (settings.google_search_console_tag.includes("<meta") || settings.google_search_console_tag.includes("<script")) {
           googleVerification = settings.google_search_console_tag;
         } else {
           googleVerification = `<meta name="google-site-verification" content="${settings.google_search_console_tag}" />`;
