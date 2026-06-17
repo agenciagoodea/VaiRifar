@@ -76,6 +76,10 @@
       "destination": "/api/favicon.ico"
     },
     {
+      "source": "/logo.png",
+      "destination": "/api/logo.png"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

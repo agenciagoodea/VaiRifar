@@ -287,7 +287,8 @@ export async function createApp(options: AppOptions = {}) {
       '/api/sitemap-pages.xml',
       '/api/sitemap-rifas.xml',
       '/api/sitemap-categorias.xml',
-      '/api/favicon.ico'
+      '/api/favicon.ico',
+      '/api/logo.png'
     ].includes(pathStr);
 
     if (isSeoPath) {
@@ -489,10 +490,13 @@ export async function createApp(options: AppOptions = {}) {
 
       // Ensure absolute URLs for ogImage and canonicalUrl, and filter out base64 images
       if (ogImage && ogImage.startsWith("data:")) {
-        ogImage = "/favicon.ico";
+        ogImage = "/logo.png";
+      }
+      if (ogImage && ogImage.includes("github.com")) {
+        ogImage = "/logo.png";
       }
       if (!ogImage) {
-        ogImage = "/favicon.ico";
+        ogImage = "/logo.png";
       }
       if (ogImage && !ogImage.startsWith("http://") && !ogImage.startsWith("https://")) {
         const cleanOg = ogImage.startsWith("/") ? ogImage.substring(1) : ogImage;
@@ -742,6 +746,61 @@ Sitemap: ${siteUrl}/sitemap.xml`;
     } catch (err) {
       console.error("Erro ao servir favicon:", err);
       res.status(500).send("Error serving favicon");
+    }
+  });
+
+  app.get("/logo.png", async (req, res) => {
+    try {
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settingsMap = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      let logoUrl = settingsMap.site_logo_url || settingsMap.seo_share_image || settingsMap.seo_og_image || "";
+      
+      if (logoUrl && logoUrl.startsWith("data:")) {
+        const matches = logoUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          res.type(contentType);
+          res.set("Cache-Control", "public, max-age=86400");
+          return res.send(buffer);
+        }
+      }
+
+      if (logoUrl && (logoUrl.startsWith("http://") || logoUrl.startsWith("https://"))) {
+        try {
+          const response = await fetch(logoUrl);
+          if (response.ok) {
+            const buffer = Buffer.from(await response.arrayBuffer());
+            res.type(response.headers.get("content-type") || "image/png");
+            res.set("Cache-Control", "public, max-age=86400");
+            return res.send(buffer);
+          }
+        } catch (fetchErr) {
+          console.error("Erro ao fazer fetch da imagem externa:", fetchErr);
+        }
+      }
+
+      // Fallback para o favicon se o logo falhar
+      const faviconUrl = settingsMap.site_favicon_url || settingsMap.seo_favicon_url || "";
+      if (faviconUrl && faviconUrl.startsWith("data:")) {
+        const matches = faviconUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          res.type(contentType);
+          res.set("Cache-Control", "public, max-age=86400");
+          return res.send(buffer);
+        }
+      }
+
+      res.status(404).send("Logo not found");
+    } catch (err) {
+      console.error("Erro ao servir logo:", err);
+      res.status(500).send("Error serving logo");
     }
   });
 
