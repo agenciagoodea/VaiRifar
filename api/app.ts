@@ -286,7 +286,8 @@ export async function createApp(options: AppOptions = {}) {
       '/api/sitemap.xml',
       '/api/sitemap-pages.xml',
       '/api/sitemap-rifas.xml',
-      '/api/sitemap-categorias.xml'
+      '/api/sitemap-categorias.xml',
+      '/api/favicon.ico'
     ].includes(pathStr);
 
     if (isSeoPath) {
@@ -487,12 +488,15 @@ export async function createApp(options: AppOptions = {}) {
       }
 
       // Ensure absolute URLs for ogImage and canonicalUrl, and filter out base64 images
-      if (ogImage && !ogImage.startsWith("http://") && !ogImage.startsWith("https://") && !ogImage.startsWith("data:")) {
+      if (ogImage && ogImage.startsWith("data:")) {
+        ogImage = "/favicon.ico";
+      }
+      if (!ogImage) {
+        ogImage = "/favicon.ico";
+      }
+      if (ogImage && !ogImage.startsWith("http://") && !ogImage.startsWith("https://")) {
         const cleanOg = ogImage.startsWith("/") ? ogImage.substring(1) : ogImage;
         ogImage = `${siteUrl}/${cleanOg}`;
-      }
-      if (ogImage && ogImage.startsWith("data:")) {
-        ogImage = "";
       }
       if (canonicalUrl && !canonicalUrl.startsWith("http://") && !canonicalUrl.startsWith("https://")) {
         const cleanCanonical = canonicalUrl.startsWith("/") ? canonicalUrl.substring(1) : canonicalUrl;
@@ -712,6 +716,32 @@ Sitemap: ${siteUrl}/sitemap.xml`;
       res.send(xml);
     } catch (e) {
       res.status(500).send("Error generating categories sitemap");
+    }
+  });
+
+  app.get("/favicon.ico", async (req, res) => {
+    try {
+      const { data: dbSettings } = await supabase.from("settings").select("*");
+      const settingsMap = (dbSettings || []).reduce((acc: any, s: any) => {
+        acc[s.key] = s.value;
+        return acc;
+      }, {});
+
+      const faviconUrl = settingsMap.site_favicon_url || settingsMap.seo_favicon_url || "";
+      if (faviconUrl && faviconUrl.startsWith("data:")) {
+        const matches = faviconUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          res.type(contentType);
+          res.set("Cache-Control", "public, max-age=86400");
+          return res.send(buffer);
+        }
+      }
+      res.status(404).send("Favicon not found");
+    } catch (err) {
+      console.error("Erro ao servir favicon:", err);
+      res.status(500).send("Error serving favicon");
     }
   });
 

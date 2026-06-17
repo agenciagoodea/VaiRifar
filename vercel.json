@@ -72,6 +72,10 @@
       "destination": "/api/sitemap-categorias.xml"
     },
     {
+      "source": "/favicon.ico",
+      "destination": "/api/favicon.ico"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
