@@ -351,13 +351,13 @@ export async function createApp(options: AppOptions = {}) {
       }, {});
 
       // Inicializar variáveis de SEO
-      let title = settings.seo_title_default || settings.site_name || "VaiRifar - Sorteios Online";
-      let description = settings.seo_description_default || settings.site_description || "Plataforma de rifas e sorteios online.";
-      let keywords = settings.seo_keywords_default || "rifa, sorteio, online";
-      let robots = "index, follow";
+      let title = settings.seo_title_default || settings.seo_title || settings.site_name || "VaiRifar - Sorteios Online";
+      let description = settings.seo_description_default || settings.seo_description || settings.site_description || "Plataforma de rifas e sorteios online.";
+      let keywords = settings.seo_keywords_default || settings.seo_keywords || "rifa, sorteio, online";
+      let robots = settings.seo_robots || "index, follow";
       const siteUrl = settings.seo_site_url || `${req.protocol}://${req.get('host')}`;
       let canonicalUrl = `${siteUrl}${req.path}`;
-      let ogImage = settings.seo_share_image || settings.site_logo_url || "";
+      let ogImage = settings.seo_share_image || settings.seo_og_image || settings.site_logo_url || "";
       let ogType = "website";
       let ogTitle = title;
       let ogDescription = description;
@@ -464,6 +464,19 @@ export async function createApp(options: AppOptions = {}) {
           "name": title,
           "url": canonicalUrl
         };
+      }
+
+      // Ensure absolute URLs for ogImage and canonicalUrl, and filter out base64 images
+      if (ogImage && !ogImage.startsWith("http://") && !ogImage.startsWith("https://") && !ogImage.startsWith("data:")) {
+        const cleanOg = ogImage.startsWith("/") ? ogImage.substring(1) : ogImage;
+        ogImage = `${siteUrl}/${cleanOg}`;
+      }
+      if (ogImage && ogImage.startsWith("data:")) {
+        ogImage = "";
+      }
+      if (canonicalUrl && !canonicalUrl.startsWith("http://") && !canonicalUrl.startsWith("https://")) {
+        const cleanCanonical = canonicalUrl.startsWith("/") ? canonicalUrl.substring(1) : canonicalUrl;
+        canonicalUrl = `${siteUrl}/${cleanCanonical}`;
       }
 
       let googleVerification = "";
