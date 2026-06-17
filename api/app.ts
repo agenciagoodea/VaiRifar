@@ -281,7 +281,12 @@ export async function createApp(options: AppOptions = {}) {
       '/api/politica-de-cookies',
       '/api/lgpd',
       '/api/resultados',
-      '/api/ganhadores'
+      '/api/ganhadores',
+      '/api/robots.txt',
+      '/api/sitemap.xml',
+      '/api/sitemap-pages.xml',
+      '/api/sitemap-rifas.xml',
+      '/api/sitemap-categorias.xml'
     ].includes(pathStr);
 
     if (isSeoPath) {

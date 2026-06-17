@@ -45,6 +45,26 @@
       "destination": "/api/ganhadores"
     },
     {
+      "source": "/robots.txt",
+      "destination": "/api/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap.xml"
+    },
+    {
+      "source": "/sitemap-pages.xml",
+      "destination": "/api/sitemap-pages.xml"
+    },
+    {
+      "source": "/sitemap-rifas.xml",
+      "destination": "/api/sitemap-rifas.xml"
+    },
+    {
+      "source": "/sitemap-categorias.xml",
+      "destination": "/api/sitemap-categorias.xml"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
