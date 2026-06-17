@@ -1563,7 +1563,7 @@ const Sidebar = ({ activeTab, onNavigate, onLogout, user, globalSettings, onNavi
     <div className="w-72 bg-white border-r border-zinc-100 h-screen sticky top-0 flex flex-col p-6">
       <button
         type="button"
-        onClick={() => onNavigate('home')}
+        onClick={() => onNavigateRoot?.('home')}
         className="mb-10 px-2 flex items-center gap-3 text-left transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-xl"
         aria-label="Ir para a home publica"
       >

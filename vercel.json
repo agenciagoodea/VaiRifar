@@ -5,6 +5,38 @@
       "destination": "/api?path=:path*"
     },
     {
+      "source": "/rifa/:slug",
+      "destination": "/api/rifa/:slug"
+    },
+    {
+      "source": "/",
+      "destination": "/api/"
+    },
+    {
+      "source": "/politica-de-privacidade",
+      "destination": "/api/politica-de-privacidade"
+    },
+    {
+      "source": "/termos-de-uso",
+      "destination": "/api/termos-de-uso"
+    },
+    {
+      "source": "/politica-de-cookies",
+      "destination": "/api/politica-de-cookies"
+    },
+    {
+      "source": "/lgpd",
+      "destination": "/api/lgpd"
+    },
+    {
+      "source": "/resultados",
+      "destination": "/api/resultados"
+    },
+    {
+      "source": "/ganhadores",
+      "destination": "/api/ganhadores"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

@@ -274,6 +274,23 @@ export async function createApp(options: AppOptions = {}) {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   app.use((req, res, next) => {
+    const pathStr = req.url.split('?')[0];
+    const isSeoPath = pathStr === '/api' || pathStr === '/api/' || pathStr.startsWith('/api/rifa/') || [
+      '/api/politica-de-privacidade',
+      '/api/termos-de-uso',
+      '/api/politica-de-cookies',
+      '/api/lgpd',
+      '/api/resultados',
+      '/api/ganhadores'
+    ].includes(pathStr);
+
+    if (isSeoPath) {
+      const originalUrl = req.url;
+      req.url = req.url.replace(/^\/api/, '');
+      if (req.url === '') req.url = '/';
+      console.log(`[SEO URL NORMALIZER] Normalized ${originalUrl} to ${req.url}`);
+    }
+
     console.log(`[REQUEST] ${req.method} ${req.url}`);
     next();
   });
