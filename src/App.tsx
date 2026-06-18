@@ -3056,16 +3056,16 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
               <div className="space-y-5 max-w-2xl">
                 <h1 className="text-5xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[0.92]" style={{ color: textColor }}>
-                  Rifas online com
+                  Cada número é
                   <span
                     className="block text-transparent bg-clip-text"
-                    style={{ backgroundImage: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }}
+                    style={{ backgroundImage: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor}, ${primaryColor})` }}
                   >
-                    presença de campanha grande
+                    uma chance real de ganhar
                   </span>
                 </h1>
-                <p className="text-lg md:text-2xl font-medium leading-relaxed" style={{ color: hexToRgba(textColor, 0.78) }}>
-                  Um hero mais forte, com prêmios, estádio e energia de sorteio real. Sua landing passa sensação de valor antes mesmo do clique.
+                <p className="text-lg md:text-xl font-medium leading-relaxed" style={{ color: hexToRgba(textColor, 0.78) }}>
+                  Participe de rifas organizadas com total transparência. Garanta sua cota em segundos via Pix e acompanhe cada etapa — do cadastro ao sorteio ao vivo.
                 </p>
               </div>
 
@@ -3073,7 +3073,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                 <a
                   href="#campanhas"
                   className="text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-lg transition-all text-center flex items-center justify-center gap-2"
-                  style={{ backgroundColor: buttonColor, boxShadow: `0 18px 40px ${hexToRgba(buttonColor, 0.24)}` }}
+                  style={{ backgroundColor: primaryColor, boxShadow: `0 18px 40px ${hexToRgba(primaryColor, 0.24)}` }}
                 >
                   <Ticket className="w-5 h-5" /> Ver rifas em destaque
                 </a>
@@ -3324,8 +3324,8 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                 className="bg-white/85 backdrop-blur-md rounded-[2rem] border border-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.06)] transition-all relative overflow-hidden group"
                 style={{ boxShadow: `0 24px 70px ${hexToRgba(buttonColor, 0.10)}` }}
               >
-                <div className="absolute top-0 right-0 w-24 h-24 rounded-bl-[5rem] pointer-events-none opacity-70" style={{ backgroundColor: hexToRgba(buttonColor, 0.14) }} />
-                <div className="w-14 h-14 text-white rounded-2xl flex items-center justify-center font-black text-2xl mb-6 shadow-inner group-hover:scale-110 transition-all duration-300" style={{ backgroundColor: textColor, border: `1px solid ${textColor}` }}>
+                <div className="absolute top-0 right-0 w-24 h-24 rounded-bl-[5rem] pointer-events-none opacity-70" style={{ backgroundColor: hexToRgba(primaryColor, 0.14) }} />
+                <div className="w-14 h-14 text-white rounded-2xl flex items-center justify-center font-black text-2xl mb-6 shadow-inner group-hover:scale-110 transition-all duration-300" style={{ backgroundColor: primaryColor, boxShadow: `0 10px 28px ${hexToRgba(primaryColor, 0.30)}`, border: `1px solid ${primaryColor}` }}>
                   {i + 1}
                 </div>
                 <h3 className="text-xl font-bold mb-3" style={{ color: textColor }}>{step.title}</h3>
@@ -3395,7 +3395,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                   }
                 }}
                 className="text-white font-black text-base md:text-lg px-12 py-5 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3"
-                style={{ backgroundColor: buttonColor, boxShadow: `0 18px 40px ${hexToRgba(buttonColor, 0.22)}` }}
+                style={{ backgroundColor: primaryColor, boxShadow: `0 18px 40px ${hexToRgba(primaryColor, 0.28)}` }}
               >
                 <Rocket className="w-5 h-5" /> Criar minha campanha
               </button>
@@ -8247,9 +8247,19 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const [logoUrl, setLogoUrl] = useState(user.logo_url || '');
   const [logoPreview, setLogoPreview] = useState(user.logo_url || '');
   const hasPixConfig = Boolean(
-    pixConfig?.pix_key?.toString().trim() &&
-    pixConfig?.pix_holder_name?.toString().trim()
+    pixConfig &&
+    pixConfig.pix_key &&
+    pixConfig.pix_key.toString().trim() &&
+    pixConfig.pix_holder_name &&
+    pixConfig.pix_holder_name.toString().trim()
   );
+
+  console.log('DEBUG DASHBOARD PIX STATE:', {
+    pixConfigLoaded,
+    pixConfig,
+    hasPixConfig,
+    userRole: user.role
+  });
 
   const fetchPixConfig = async () => {
     try {
@@ -8272,16 +8282,40 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
     try { localStorage.setItem('rifapro-dashboard-tab', 'settings'); } catch { /* ignorar */ }
   };
 
-  const handleOpenCreateCampaign = (campaignToEdit?: Campaign | null) => {
+  const handleOpenCreateCampaign = async (campaignToEdit?: Campaign | null) => {
     if (campaignToEdit) {
       setEditingCampaign(campaignToEdit);
       setShowCreate(true);
       return;
     }
 
-    if (!pixConfigLoaded) return;
+    let isConfigLoaded = pixConfigLoaded;
+    let currentPixConfig = pixConfig;
 
-    if (!hasPixConfig) {
+    if (!isConfigLoaded) {
+      try {
+        const { config } = await fetchJsonWithAuth('/api/payment-configs/me');
+        currentPixConfig = config || null;
+        setPixConfig(currentPixConfig);
+        setPixConfigLoaded(true);
+        isConfigLoaded = true;
+      } catch (err) {
+        console.error('Erro ao carregar configuracao PIX no clique:', err);
+        setPixConfig(null);
+        setPixConfigLoaded(true);
+        isConfigLoaded = true;
+      }
+    }
+
+    const currentHasPix = Boolean(
+      currentPixConfig &&
+      currentPixConfig.pix_key &&
+      currentPixConfig.pix_key.toString().trim() &&
+      currentPixConfig.pix_holder_name &&
+      currentPixConfig.pix_holder_name.toString().trim()
+    );
+
+    if (!currentHasPix) {
       openPixConfigRequired();
       return;
     }
@@ -8677,6 +8711,35 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
               <h1 className="text-3xl font-black text-zinc-900 mb-2">Olá, {user.name}</h1>
               <p className="text-zinc-400 font-medium">Gerencie suas campanhas e acompanhe suas vendas.</p>
             </header>
+
+            {pixConfigLoaded && !hasPixConfig && (
+              <div className="rounded-[2rem] border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 p-6 md:p-7 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1 text-left">
+                      <p className="text-lg font-black text-zinc-900">Configuração de Pix Pendente</p>
+                      <p className="text-sm font-medium text-zinc-500">Cadastre uma chave PIX para poder criar suas campanhas e receber pagamentos.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowPixRequiredNotice(true);
+                      setActiveTab('settings');
+                      setSettingsTab('pix-config');
+                      try { localStorage.setItem('rifapro-dashboard-tab', 'settings'); } catch { /* ignorar */ }
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white transition-all hover:scale-[1.01] shrink-0"
+                    style={{ backgroundColor: 'var(--primary-color)', boxShadow: '0 18px 36px rgba(239, 68, 68, 0.08)' }}
+                  >
+                    Configurar agora
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <section>
               <div className="flex items-center justify-between mb-6">
