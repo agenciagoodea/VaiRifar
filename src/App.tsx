@@ -2949,7 +2949,9 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
   const lowestTicketPrice = activeCampaigns.length > 0
     ? Math.min(...activeCampaigns.map(campaign => Number(campaign.ticket_price) || 0).filter(price => price > 0))
     : 0;
-  const showcaseCampaign = activeCampaigns[0] || campaigns[0] || null;
+  const heroCampaigns = (activeCampaigns.length > 0 ? activeCampaigns : campaigns).slice(0, 6);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const showcaseCampaign = heroCampaigns[heroIndex] || null;
   const showcaseProgress = showcaseCampaign
     ? Math.min(100, Math.round(((showcaseCampaign.sold_count || 0) / Math.max(showcaseCampaign.total_tickets || 1, 1)) * 100))
     : 68;
@@ -2968,6 +2970,14 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
     const blue = parseInt(normalized.slice(4, 6), 16);
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
   };
+
+  useEffect(() => {
+    if (heroCampaigns.length <= 1) return;
+    const intervalId = window.setInterval(() => {
+      setHeroIndex(prev => (prev + 1) % heroCampaigns.length);
+    }, 4500);
+    return () => window.clearInterval(intervalId);
+  }, [heroCampaigns.length]);
 
   return (
     <div className="w-full min-h-screen relative overflow-hidden pb-24" style={{ backgroundColor, color: textColor }}>
@@ -3043,126 +3053,83 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
           <div className="lg:col-span-6 relative">
             <div
-              className="relative rounded-[2.5rem] border border-white/80 p-5 sm:p-7 shadow-[0_30px_80px_rgba(245,158,11,0.16)] overflow-hidden"
-              style={{
-                boxShadow: `0 30px 80px ${hexToRgba(buttonColor, 0.18)}`,
-                background: `linear-gradient(145deg, #ffffff 0%, ${hexToRgba(secondaryColor, 0.14)} 55%, #ffffff 100%)`
-              }}
+              className="relative rounded-[2.8rem] border border-white/70 overflow-hidden min-h-[520px] shadow-[0_30px_80px_rgba(15,23,42,0.16)]"
+              style={{ boxShadow: `0 30px 80px ${hexToRgba(buttonColor, 0.18)}` }}
             >
-              <img src="/hero-bg.png" alt="Troféu dourado com bilhetes de rifa voando" className="absolute inset-0 w-full h-full object-cover opacity-88" />
-              <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${hexToRgba(backgroundColor, 0.92)} 4%, ${hexToRgba(backgroundColor, 0.74)} 44%, ${hexToRgba(textColor, 0.18)} 100%)` }} />
-              <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${hexToRgba(buttonColor, 0.22)}, transparent 30%), radial-gradient(circle at bottom left, ${hexToRgba(primaryColor, 0.18)}, transparent 32%)` }} />
-              <div className="relative grid grid-cols-1 md:grid-cols-[1.2fr_0.8fr] gap-5">
-                <div className="rounded-[2rem] bg-white/88 border border-white shadow-sm p-5 space-y-5 backdrop-blur-md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: primaryColor }}>Campanha em evidência</p>
-                      <h3 className="text-2xl font-black mt-2 leading-tight" style={{ color: textColor }}>
-                        {showcaseCampaign?.title || 'Rifa especial com premiação em destaque'}
-                      </h3>
-                    </div>
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor, border: `1px solid ${hexToRgba(buttonColor, 0.18)}` }}>
-                      <Gift className="w-7 h-7" />
-                    </div>
-                  </div>
+              <img src="/hero-bg.png" alt="Troféu dourado com bilhetes de rifa voando" className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${hexToRgba(textColor, 0.18)} 0%, ${hexToRgba(backgroundColor, 0.44)} 32%, ${hexToRgba(backgroundColor, 0.10)} 100%)` }} />
+              <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at top left, ${hexToRgba(primaryColor, 0.22)}, transparent 30%), radial-gradient(circle at bottom right, ${hexToRgba(buttonColor, 0.22)}, transparent 34%)` }} />
 
-                  <div className="rounded-[1.75rem] p-4" style={{ border: `1px solid ${hexToRgba(buttonColor, 0.14)}`, background: `linear-gradient(90deg, ${hexToRgba(buttonColor, 0.10)}, ${hexToRgba(primaryColor, 0.08)})` }}>
-                    <div className="flex items-center justify-between gap-4">
+              <div className="relative h-full p-6 sm:p-8 flex flex-col justify-end">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={showcaseCampaign?.id || heroIndex}
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -24 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    className="rounded-[2rem] bg-white/80 backdrop-blur-xl border border-white/70 p-5 sm:p-6 max-w-[420px] shadow-2xl"
+                  >
+                    <div className="flex items-center justify-between gap-4 mb-5">
                       <div>
-                        <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: hexToRgba(textColor, 0.58) }}>Prêmio principal</p>
-                        <p className="text-xl font-black mt-1" style={{ color: textColor }}>Premiação de alto impacto</p>
-                        <p className="text-sm mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Visual pensado para destacar valor percebido e urgência.</p>
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: primaryColor }}>Rifa ativa</p>
+                        <h3 className="text-2xl sm:text-3xl font-black mt-2 leading-tight" style={{ color: textColor }}>
+                          {showcaseCampaign?.title || 'Rifas em destaque'}
+                        </h3>
                       </div>
-                      <div className="w-20 h-20 rounded-[1.5rem] bg-zinc-950 text-white flex flex-col items-center justify-center shadow-lg">
-                        <Trophy className="w-7 h-7" style={{ color: buttonColor }} />
-                        <span className="text-[10px] font-black uppercase tracking-[0.18em] mt-1">Top prize</span>
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor }}>
+                        <Ticket className="w-7 h-7" />
                       </div>
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    {['02491', '02492', '02493'].map((ticket, index) => (
-                      <div key={ticket} className={`rounded-2xl border p-3 text-center ${index === 1 ? 'text-white border-zinc-950 shadow-lg' : 'text-zinc-900 border-zinc-200'}`} style={index === 1 ? { backgroundColor: textColor } : { backgroundColor }}>
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-70">Cota</p>
-                        <p className="text-lg font-black mt-1">{ticket}</p>
+                    <div className="relative rounded-[1.5rem] overflow-hidden mb-5">
+                      <img
+                        src={showcaseCampaign?.image_url || '/winner-celebration.png'}
+                        alt={showcaseCampaign?.title || 'Campanha ativa'}
+                        className="w-full h-52 object-cover"
+                      />
+                      <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, transparent 0%, ${hexToRgba(textColor, 0.68)} 100%)` }} />
+                      <div className="absolute left-4 right-4 bottom-4 flex items-end justify-between gap-4 text-white">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-80">A partir de</p>
+                          <p className="text-2xl font-black">{showcaseCampaign ? formatCurrency(Number(showcaseCampaign.ticket_price) || 0) : 'R$ 0,00'}</p>
+                        </div>
+                        <div className="px-3 py-2 rounded-xl bg-white/16 backdrop-blur-sm text-right">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-80">Cotas vendidas</p>
+                          <p className="text-lg font-black">{showcaseCampaign?.sold_count || 0}</p>
+                        </div>
                       </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm font-bold" style={{ color: hexToRgba(textColor, 0.74) }}>
+                        <span>Andamento da rifa</span>
+                        <span>{showcaseProgress}% emitido</span>
+                      </div>
+                      <div className="h-3 rounded-full bg-zinc-200/80 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${showcaseProgress}%`, background: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }} />
+                      </div>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+
+                {heroCampaigns.length > 1 && (
+                  <div className="flex items-center gap-2 mt-5 ml-2">
+                    {heroCampaigns.map((campaign, index) => (
+                      <button
+                        key={campaign.id}
+                        type="button"
+                        onClick={() => setHeroIndex(index)}
+                        className="h-2.5 rounded-full transition-all"
+                        style={{
+                          width: index === heroIndex ? '2.5rem' : '0.7rem',
+                          backgroundColor: index === heroIndex ? buttonColor : hexToRgba('#ffffff', 0.58)
+                        }}
+                        aria-label={`Ir para a rifa ${index + 1}`}
+                      />
                     ))}
                   </div>
-
-                  <div>
-                    <div className="flex items-center justify-between text-sm font-bold text-zinc-600 mb-2">
-                      <span>Ritmo da campanha</span>
-                      <span>{showcaseProgress}% emitido</span>
-                    </div>
-                    <div className="h-3 rounded-full bg-zinc-100 overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${showcaseProgress}%`, background: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-4">
-                  <div className="rounded-[1.75rem] text-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.18)]" style={{ backgroundColor: textColor }}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Pagamento</p>
-                        <p className="text-xl font-black mt-2">Pix liberado</p>
-                      </div>
-                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: hexToRgba(primaryColor, 0.15), color: primaryColor }}>
-                        <QrCode className="w-6 h-6" />
-                      </div>
-                    </div>
-                    <div className="mt-5 space-y-3">
-                      <div className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
-                        <span className="text-sm text-zinc-300">Compra confirmada</span>
-                        <CheckCircle2 className="w-5 h-5" style={{ color: primaryColor }} />
-                      </div>
-                      <div className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
-                        <span className="text-sm text-zinc-300">Cotas vinculadas</span>
-                        <Ticket className="w-5 h-5" style={{ color: buttonColor }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.75rem] border border-white bg-white/85 p-5 shadow-sm">
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: hexToRgba(textColor, 0.56) }}>Resumo ao vivo</p>
-                    <div className="mt-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm" style={{ color: hexToRgba(textColor, 0.62) }}>Cotas vendidas</span>
-                        <span className="text-lg font-black" style={{ color: textColor }}>{totalSoldTickets}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm" style={{ color: hexToRgba(textColor, 0.62) }}>Campanhas ativas</span>
-                        <span className="text-lg font-black" style={{ color: textColor }}>{activeCampaigns.length}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm" style={{ color: hexToRgba(textColor, 0.62) }}>Sorteios concluídos</span>
-                        <span className="text-lg font-black" style={{ color: textColor }}>{finishedCampaigns.length}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.75rem] p-5 shadow-sm" style={{ border: `1px solid ${hexToRgba(primaryColor, 0.14)}`, backgroundColor: hexToRgba(primaryColor, 0.08) }}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center" style={{ color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.14)}` }}>
-                        <Users className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-black" style={{ color: textColor }}>Apoiadores e organizadores no mesmo fluxo</p>
-                        <p className="text-sm mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Gestão clara para vender, acompanhar e premiar sem atrito.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute -right-2 top-10 hidden md:flex items-center gap-3 rounded-2xl border border-white bg-white/90 px-4 py-3 shadow-lg">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor }}>
-                <Trophy className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: hexToRgba(textColor, 0.56) }}>Resultado</p>
-                <p className="text-sm font-black" style={{ color: textColor }}>Premiação em destaque</p>
+                )}
               </div>
             </div>
           </div>
