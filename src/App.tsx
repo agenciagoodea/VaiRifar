@@ -1308,12 +1308,13 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
 };
 
 // --- Componentes de Configuração de Pagamento ---
-const PixConfigPanel = ({ user, onBack, onSaved }: { user: User, onBack: () => void, onSaved?: () => void }) => {
+const PixConfigPanel = ({ user, onBack, onSaved, requiredNotice = false, onConfigureClick }: { user: User, onBack: () => void, onSaved?: () => void, requiredNotice?: boolean, onConfigureClick?: () => void }) => {
   const [pixType, setPixType] = useState('cpf');
   const [pixKey, setPixKey] = useState('');
   const [pixName, setPixName] = useState('');
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const pixKeyInputRef = React.useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -1364,6 +1365,21 @@ const PixConfigPanel = ({ user, onBack, onSaved }: { user: User, onBack: () => v
     { value: 'random', label: 'Chave Aleatória' },
   ];
 
+  const focusPixForm = () => {
+    pixKeyInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    pixKeyInputRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (requiredNotice && loaded) {
+      const timeout = window.setTimeout(() => {
+        focusPixForm();
+      }, 150);
+
+      return () => window.clearTimeout(timeout);
+    }
+  }, [requiredNotice, loaded]);
+
   return (
     <div className="space-y-8">
       <header className="flex justify-between items-center">
@@ -1387,6 +1403,33 @@ const PixConfigPanel = ({ user, onBack, onSaved }: { user: User, onBack: () => v
         </div>
       ) : (
         <div className="glass-card p-8 space-y-8">
+          {requiredNotice && (
+            <div className="rounded-[2rem] border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 p-6 md:p-7 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-lg font-black text-zinc-900">Voce precisa primeiro cadastrar a sua chave PIX para receber os seus pagamentos.</p>
+                    <p className="text-sm font-medium text-zinc-500">Preencha sua chave e o nome do titular abaixo para liberar a criacao da campanha.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    focusPixForm();
+                    onConfigureClick?.();
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white transition-all hover:scale-[1.01]"
+                  style={{ backgroundColor: 'var(--primary-color)', boxShadow: '0 18px 36px rgba(5, 150, 105, 0.18)' }}
+                >
+                  Clique aqui para configurar
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block">Tipo de Chave</label>
             <div className="flex bg-zinc-100 p-1 rounded-2xl">
@@ -1406,6 +1449,7 @@ const PixConfigPanel = ({ user, onBack, onSaved }: { user: User, onBack: () => v
           <div className="space-y-2">
             <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block">Chave PIX</label>
             <input
+              ref={pixKeyInputRef}
               type="text"
               placeholder={pixType === 'cpf' ? '000.000.000-00' : pixType === 'email' ? 'seu@email.com' : pixType === 'phone' ? '(11) 99999-9999' : 'Cole sua chave aleatória'}
               className="w-full h-14 rounded-2xl border border-zinc-200 px-5 font-medium outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
@@ -2980,6 +3024,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
     return () => window.clearInterval(intervalId);
   }, [heroCampaigns.length]);
 
+
   return (
     <div className="w-full min-h-screen relative overflow-hidden pb-24" style={{ backgroundColor, color: textColor }}>
       <div
@@ -4520,41 +4565,79 @@ const CreateCampaignModal = ({ user, onClose, onCreated, initialData, globalSett
     { id: 4, label: 'SEO e Divulgação' }
   ];
 
+  const stepDescriptions: Record<number, string> = {
+    1: 'Nome, quantidade e valor',
+    2: 'Imagem, limites e regras',
+    3: 'Exibicao, premios e data',
+    4: 'Google e compartilhamento'
+  };
+
   return (
     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
       >
-        <div className="p-8 border-b border-zinc-100 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="p-6 md:p-8 border-b border-zinc-100 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
             <div className="w-10 h-10 bg-brand-orange/10 rounded-full flex items-center justify-center text-brand-orange">
               {initialData ? <Edit3 className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
             </div>
-            <h2 className="text-2xl font-black text-zinc-900">{initialData ? 'Editar campanha' : 'Criar campanha'}</h2>
+            <div className="space-y-1">
+              <h2 className="text-2xl md:text-3xl font-black text-zinc-900">{initialData ? 'Editar campanha' : 'Criar campanha'}</h2>
+              <p className="text-sm md:text-base text-zinc-400 font-medium">Preencha cada etapa com calma. O passo a passo foi reorganizado para ficar mais claro.</p>
+            </div>
           </div>
           <button onClick={onClose} className="bg-zinc-50 p-3 rounded-2xl text-zinc-400 hover:text-zinc-600 transition-all flex items-center gap-2 font-bold text-xs uppercase tracking-widest">
             <ArrowRight className="w-4 h-4 rotate-180" /> Voltar
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8">
           {/* Steps Indicator */}
-          <div className="flex items-center justify-center gap-12 mb-12">
-            {steps.map((s) => (
-              <div key={s.id} className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${step === s.id ? 'bg-brand-orange text-white shadow-lg shadow-orange-100' :
-                  step > s.id ? 'bg-brand-green text-white' : 'bg-zinc-100 text-zinc-400'
-                  }`}>
-                  {step > s.id ? <CheckCircle2 className="w-5 h-5" /> : s.id}
-                </div>
-                <span className={`font-bold text-sm ${step === s.id ? 'text-zinc-900' : 'text-zinc-400'}`}>{s.label}</span>
-                {s.id < 3 && <div className="w-24 h-1 bg-zinc-100 rounded-full overflow-hidden">
-                  <div className={`h-full bg-brand-orange transition-all duration-500 ${step > s.id ? 'w-full' : 'w-0'}`} />
-                </div>}
+          <div className="mb-10 space-y-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.28em] text-zinc-400">Passo {step} de {steps.length}</p>
+                <h3 className="text-lg font-black text-zinc-900 mt-1">{steps.find((item) => item.id === step)?.label}</h3>
               </div>
-            ))}
+              <span className="text-sm font-bold text-zinc-400">{Math.round((step / steps.length) * 100)}% concluído</span>
+            </div>
+            <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${(step / steps.length) * 100}%`, backgroundColor: 'var(--primary-color)' }}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {steps.map((s) => (
+                <div
+                  key={s.id}
+                  className={`rounded-[1.75rem] border p-4 transition-all ${step === s.id
+                    ? 'border-zinc-900 bg-zinc-50 shadow-sm'
+                    : step > s.id
+                      ? 'border-emerald-200 bg-emerald-50/60'
+                      : 'border-zinc-100 bg-white'
+                    }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-black text-sm transition-all ${step === s.id
+                      ? 'text-white'
+                      : step > s.id
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-zinc-100 text-zinc-400'
+                      }`} style={step === s.id ? { backgroundColor: 'var(--primary-color)', boxShadow: '0 12px 30px rgba(0,0,0,0.08)' } : undefined}>
+                      {step > s.id ? <CheckCircle2 className="w-5 h-5" /> : s.id}
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`font-black text-sm ${step === s.id ? 'text-zinc-900' : step > s.id ? 'text-emerald-700' : 'text-zinc-500'}`}>{s.label}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-400">{stepDescriptions[s.id]}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
@@ -8101,6 +8184,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const [localSettings, setLocalSettings] = useState<any>(globalSettings);
   const [pixConfig, setPixConfig] = useState<any>(null);
   const [pixConfigLoaded, setPixConfigLoaded] = useState(false);
+  const [showPixRequiredNotice, setShowPixRequiredNotice] = useState(false);
 
   // States para Supporters
   const [selectedSupporter, setSelectedSupporter] = useState<any>(null);
@@ -8182,9 +8266,9 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   };
 
   const openPixConfigRequired = () => {
-    alert('Antes de criar uma campanha, cadastre sua chave PIX para receber os pagamentos diretamente no seu banco.');
     setShowCreate(false);
     setEditingCampaign(null);
+    setShowPixRequiredNotice(true);
     setActiveTab('settings');
     setSettingsTab('pix-config');
     try { localStorage.setItem('rifapro-dashboard-tab', 'settings'); } catch { /* ignorar */ }
@@ -8197,16 +8281,14 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
       return;
     }
 
-    if (!pixConfigLoaded) {
-      alert('Aguarde um instante enquanto validamos sua configuraÃ§Ã£o PIX.');
-      return;
-    }
+    if (!pixConfigLoaded) return;
 
     if (!hasPixConfig) {
       openPixConfigRequired();
       return;
     }
 
+    setShowPixRequiredNotice(false);
     setEditingCampaign(null);
     setShowCreate(true);
   };
@@ -9143,7 +9225,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
         );
 
         if (settingsTab === 'pix-config') return (
-          <PixConfigPanel user={user} onBack={() => setSettingsTab('payments')} onSaved={fetchPixConfig} />
+          <PixConfigPanel user={user} onBack={() => setSettingsTab('payments')} onSaved={() => { fetchPixConfig(); setShowPixRequiredNotice(false); }} requiredNotice={showPixRequiredNotice} onConfigureClick={() => setShowPixRequiredNotice(false)} />
         );
 
 
