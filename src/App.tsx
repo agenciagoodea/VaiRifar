@@ -3051,21 +3051,21 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-md text-xs font-black shadow-sm tracking-[0.18em] uppercase"
                 style={{ color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
               >
-                <Trophy className="w-3.5 h-3.5" /> Plataforma clara para rifas e premiações
+                <Trophy className="w-3.5 h-3.5" /> A plataforma que transforma rifas em resultados reais
               </div>
 
               <div className="space-y-5 max-w-2xl">
                 <h1 className="text-5xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[0.92]" style={{ color: textColor }}>
-                  Cada número é
+                  Crie sua rifa e
                   <span
                     className="block text-transparent bg-clip-text"
                     style={{ backgroundImage: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor}, ${primaryColor})` }}
                   >
-                    uma chance real de ganhar
+                    receba direto no Pix
                   </span>
                 </h1>
                 <p className="text-lg md:text-xl font-medium leading-relaxed" style={{ color: hexToRgba(textColor, 0.78) }}>
-                  Participe de rifas organizadas com total transparência. Garanta sua cota em segundos via Pix e acompanhe cada etapa — do cadastro ao sorteio ao vivo.
+                  Monte sua campanha em minutos, destaque seus prêmios e receba o valor das cotas automaticamente na sua conta. Sem taxa por venda, sem complicação.
                 </p>
               </div>
 
@@ -3075,7 +3075,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                   className="text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-lg transition-all text-center flex items-center justify-center gap-2"
                   style={{ backgroundColor: primaryColor, boxShadow: `0 18px 40px ${hexToRgba(primaryColor, 0.24)}` }}
                 >
-                  <Ticket className="w-5 h-5" /> Ver rifas em destaque
+                  <Ticket className="w-5 h-5" /> Quero participar agora
                 </a>
                 <button
                   onClick={() => {
@@ -3085,22 +3085,22 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                   className="bg-white/80 backdrop-blur-md font-bold text-base px-8 py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm"
                   style={{ color: textColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
                 >
-                  <Play className="w-5 h-5" style={{ color: primaryColor }} /> Como funciona
+                  <Play className="w-5 h-5" style={{ color: primaryColor }} /> Ver como funciona
                 </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5 max-w-3xl">
                 <div className="rounded-[1.75rem] border border-white/70 bg-white/76 backdrop-blur-md p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                  <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{activeCampaigns.length}+</p>
-                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>rifas abertas agora</p>
+                  <p className="text-2xl sm:text-3xl font-black" style={{ color: primaryColor }}>{activeCampaigns.length}+</p>
+                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>rifas ativas agora</p>
                 </div>
                 <div className="rounded-[1.75rem] border border-white/70 bg-white/76 backdrop-blur-md p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                  <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{totalActiveTickets > 0 ? totalActiveTickets : 100}%</p>
-                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>números disponíveis</p>
+                  <p className="text-2xl sm:text-3xl font-black" style={{ color: primaryColor }}>100%</p>
+                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>recebimento direto no Pix</p>
                 </div>
                 <div className="rounded-[1.75rem] border border-white/70 bg-white/76 backdrop-blur-md p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                  <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{lowestTicketPrice > 0 ? formatCurrency(lowestTicketPrice) : 'Pix'}</p>
-                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>entrada rápida para participar</p>
+                  <p className="text-2xl sm:text-3xl font-black" style={{ color: primaryColor }}>{lowestTicketPrice > 0 ? formatCurrency(lowestTicketPrice) : 'Grátis'}</p>
+                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>para criar sua campanha</p>
                 </div>
               </div>
             </div>
@@ -3196,24 +3196,24 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(primaryColor, 0.14), color: primaryColor }}>
               <Shield className="w-6 h-6" />
             </div>
-            <h4 className="font-black text-lg" style={{ color: textColor }}>Compra segura e rastreável</h4>
-            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>Cada participação fica vinculada ao comprador, com fluxo simples para conferência e auditoria.</p>
+            <h4 className="font-black text-lg" style={{ color: textColor }}>Dinheiro direto na sua conta</h4>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>Cada cota vendida cai direto no seu Pix, sem intermediários, sem esperas e sem desconto de comissão sobre suas vendas.</p>
           </div>
 
           <div className="rounded-[2rem] border border-white bg-white/85 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(primaryColor, 0.14), color: primaryColor }}>
               <Zap className="w-6 h-6" />
             </div>
-            <h4 className="font-black text-lg" style={{ color: textColor }}>Pix com confirmação imediata</h4>
-            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>O participante paga, a cota é confirmada e a campanha segue com menos abandono e mais agilidade.</p>
+            <h4 className="font-black text-lg" style={{ color: textColor }}>Campanha no ar em minutos</h4>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>Cadastre prêmios, defina cotas e publique. Sua rifa começa a vender enquanto você gerencia tudo pelo painel em tempo real.</p>
           </div>
 
           <div className="rounded-[2rem] border border-white bg-white/85 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(secondaryColor, 0.14), color: secondaryColor }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(primaryColor, 0.14), color: primaryColor }}>
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h4 className="font-black text-lg" style={{ color: textColor }}>Premiação valorizada na vitrine</h4>
-            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>A home destaca prêmio, campanha e urgência para dar mais desejo de participação.</p>
+            <h4 className="font-black text-lg" style={{ color: textColor }}>Transparência que gera confiança</h4>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>Prêmio, progresso e regras visíveis para todos os participantes. Isso reduz dúvidas, aumenta vendas e fortalece sua reputação.</p>
           </div>
         </div>
       </section>
@@ -3279,10 +3279,10 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider mb-3" style={{ backgroundColor: hexToRgba(primaryColor, 0.10), color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.14)}` }}>
-              Rifas ativas
+              Rifas abertas agora
             </div>
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Campanhas em Destaque</h2>
-            <p className="font-medium mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Escolha a campanha, veja o prêmio, compre suas cotas e acompanhe a premiação com clareza.</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Escolha e participe agora</h2>
+            <p className="font-medium mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Veja o prêmio, confira o regulamento e garanta suas cotas em segundos — pagamento via Pix, confirmação imediata.</p>
           </div>
         </div>
 
@@ -3307,9 +3307,9 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       {landingSteps.length > 0 && (
         <section id="como-funciona" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-mt-24">
           <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Como Funciona</h2>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Do cadastro à premiação em 3 passos</h2>
             <p className="font-medium max-w-xl mx-auto leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>
-              Uma jornada mais clara para quem organiza e também para quem quer participar e concorrer.
+              Simples para quem organiza, confiável para quem participa. Veja como é fácil criar ou entrar em uma rifa.
             </p>
           </div>
           
@@ -3340,8 +3340,8 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       {landingFeatures.length > 0 && (
         <section id="vantagens" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 scroll-mt-24">
           <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Recursos Premium</h2>
-            <p className="font-medium" style={{ color: hexToRgba(textColor, 0.72) }}>Ferramentas pensadas para destacar rifas, gerar confiança e aumentar conversão.</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Tudo que você precisa para vender mais</h2>
+            <p className="font-medium" style={{ color: hexToRgba(textColor, 0.72) }}>Ferramentas profissionais para organizar sua campanha, engajar participantes e aumentar sua arrecadação.</p>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
@@ -3377,13 +3377,13 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
             <Trophy className="w-10 h-10" style={{ color: buttonColor }} />
           </div>
 
-          <div className="relative z-10 max-w-3xl mx-auto space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 text-xs font-bold shadow-sm uppercase tracking-wider mx-auto" style={{ color: buttonColor, border: `1px solid ${hexToRgba(buttonColor, 0.14)}` }}>
-              <Rocket className="w-4 h-4" /> Comece hoje
+          <div className="relative z-10 max-w-3xl mx-auto space-y-8 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 text-xs font-bold shadow-sm uppercase tracking-wider" style={{ color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.20)}` }}>
+              <Rocket className="w-4 h-4" /> Comece hoje — é gratuito
             </div>
-            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight max-w-2xl mx-auto" style={{ color: textColor }}>{ctaText}</h2>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight max-w-2xl mx-auto" style={{ color: textColor }}>Sua rifa começa agora. Você cria, vende e recebe — tudo em um só lugar.</h2>
             <p className="text-base md:text-lg font-medium leading-relaxed max-w-xl mx-auto" style={{ color: hexToRgba(textColor, 0.72) }}>
-              Monte uma vitrine bonita para suas rifas, destaque premiações e gerencie pagamentos Pix com uma experiência mais profissional.
+              Cadastre-se gratuitamente, monte sua campanha com prêmios, cotas e regulamento e comece a receber via Pix imediatamente após a publicação.
             </p>
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
@@ -3391,16 +3391,16 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                   if (user) {
                     onNavigate('dashboard');
                   } else {
-                    onNavigate('login');
+                    onNavigate('register');
                   }
                 }}
-                className="text-white font-black text-base md:text-lg px-12 py-5 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3"
-                style={{ backgroundColor: primaryColor, boxShadow: `0 18px 40px ${hexToRgba(primaryColor, 0.28)}` }}
+                className="text-white font-black text-base md:text-lg px-12 py-5 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 hover:opacity-90"
+                style={{ backgroundColor: primaryColor, boxShadow: `0 18px 40px ${hexToRgba(primaryColor, 0.32)}` }}
               >
-                <Rocket className="w-5 h-5" /> Criar minha campanha
+                <Rocket className="w-5 h-5" /> {user ? 'Ir para o painel' : 'Criar conta grátis'}
               </button>
-              <a href="#campanhas" className="font-bold px-8 py-4 rounded-2xl bg-white/80 hover:bg-white transition-all" style={{ color: textColor, border: `1px solid ${hexToRgba(primaryColor, 0.14)}` }}>
-                Quero participar agora
+              <a href="#campanhas" className="font-bold px-8 py-4 rounded-2xl bg-white/80 hover:bg-white transition-all" style={{ color: textColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}>
+                Ver rifas ativas
               </a>
             </div>
           </div>
@@ -3411,8 +3411,8 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       {landingFaq.length > 0 && (
         <section id="duvidas" className="max-w-4xl mx-auto px-4 py-20 scroll-mt-24">
           <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl font-black tracking-tight" style={{ color: textColor }}>Dúvidas Frequentes</h2>
-            <p className="font-medium" style={{ color: hexToRgba(textColor, 0.72) }}>Tudo o que importa para entender a compra, a criação e a transparência das rifas.</p>
+            <h2 className="text-3xl font-black tracking-tight" style={{ color: textColor }}>Perguntas Frequentes</h2>
+            <p className="font-medium" style={{ color: hexToRgba(textColor, 0.72) }}>Respondemos as principais dúvidas sobre como participar, criar campanhas e receber pagamentos.</p>
           </div>
           
           <div className="grid grid-cols-1 gap-4 max-w-3xl mx-auto">
