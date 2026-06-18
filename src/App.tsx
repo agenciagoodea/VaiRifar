@@ -7648,6 +7648,145 @@ const TaxTableEditor = ({ value, onChange }: { value: string, onChange: (v: stri
   );
 };
 
+// ─── Componente extraído para evitar erro de minificação (new Map em switch/case) ───
+const SupportersView = ({
+  orders,
+  campaigns,
+  supporterSearch,
+  setSupporterSearch,
+  setSelectedSupporter,
+}: {
+  orders: any[];
+  campaigns: any[];
+  supporterSearch: string;
+  setSupporterSearch: (v: string) => void;
+  setSelectedSupporter: (s: any) => void;
+}) => {
+  // Agrupar pedidos por campanha
+  const campaignsMap = new Map<string, { title: string; supporters: Map<string, any> }>();
+
+  orders.forEach(o => {
+    if (!o.campaign_id) return;
+    if (!campaignsMap.has(o.campaign_id)) {
+      const campaignObj = campaigns.find((c: any) => c.id === o.campaign_id);
+      campaignsMap.set(o.campaign_id, {
+        title: campaignObj?.title || 'Campanha Desconhecida',
+        supporters: new Map<string, any>()
+      });
+    }
+    const camp = campaignsMap.get(o.campaign_id)!;
+    const supKey = o.customer_email || o.customer_phone || o.customer_name;
+    if (!supKey) return;
+    if (!camp.supporters.has(supKey)) {
+      camp.supporters.set(supKey, {
+        name: o.customer_name || 'Sem Nome',
+        email: o.customer_email,
+        phone: o.customer_phone,
+        created_at: o.created_at,
+        transactions: []
+      });
+    }
+    camp.supporters.get(supKey).transactions.push(o);
+  });
+
+  return (
+    <div className="space-y-12">
+      <header className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-black text-zinc-900">Meus apoiadores</h1>
+          <p className="text-zinc-500 font-medium tracking-tight">Organizados por campanha</p>
+        </div>
+        <div className="flex gap-4">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Buscar apoiador..."
+              value={supporterSearch}
+              onChange={e => setSupporterSearch(e.target.value)}
+              className="bg-white border border-zinc-100 rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-orange w-64"
+            />
+          </div>
+        </div>
+      </header>
+
+      {(Array.from(campaignsMap.values()) as any[]).map((campData: any, campIdx: number) => {
+        const supportersArr = Array.from(campData.supporters.values()) as any[];
+        let supportersList: any[] = supportersArr;
+
+        supportersList = supportersList.filter(s =>
+          s.transactions.some((t: any) => t.status !== 'cancelled' && t.status !== 'expired')
+        );
+
+        if (supporterSearch) {
+          const lowerSearch = supporterSearch.toLowerCase();
+          supportersList = supportersList.filter(s =>
+            (s.name && s.name.toLowerCase().includes(lowerSearch)) ||
+            (s.email && s.email.toLowerCase().includes(lowerSearch)) ||
+            (s.phone && s.phone.includes(lowerSearch))
+          );
+        }
+
+        if (supportersList.length === 0) return null;
+
+        return (
+          <section key={campIdx} className="space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="h-px flex-1 bg-zinc-100"></div>
+              <h2 className="text-sm font-black text-zinc-400 uppercase tracking-[0.2em] px-4 bg-zinc-50/50 py-1 rounded-full border border-zinc-100">
+                {campData.title}
+              </h2>
+              <div className="h-px flex-1 bg-zinc-100"></div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {supportersList.map((sup, idx) => {
+                const pendingOrders = sup.transactions.filter((t: any) => t.status === 'pending' || t.status === 'waiting' || t.status === 'pending_approval');
+                const hasPending = pendingOrders.length > 0;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedSupporter(sup)}
+                    className="glass-card p-6 space-y-4 cursor-pointer hover:border-brand-orange/30 transition-colors relative group"
+                  >
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-bold text-zinc-900 line-clamp-1">{sup.name}</h3>
+                      <div className="flex items-center gap-2">
+                        {hasPending ? (
+                          <span className="text-[10px] px-2 py-1 bg-amber-50 text-amber-600 font-bold border border-amber-100 rounded-md">Pendente</span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 font-bold border border-emerald-100 rounded-md">Aprovado</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-zinc-500">
+                        <div className="bg-brand-orange/10 p-1.5 rounded-lg text-brand-orange"><TrendingUp className="w-4 h-4" /></div>
+                        {sup.phone || 'Sem Telefone'}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-zinc-500">
+                        <div className="bg-blue-50 p-1.5 rounded-lg text-blue-600"><Users className="w-4 h-4" /></div>
+                        {sup.email || 'Sem E-mail'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+
+      {campaignsMap.size === 0 && (
+        <div className="py-24 text-center text-zinc-400 bg-white rounded-[2.5rem] border border-zinc-100 border-dashed">
+          <Users className="w-12 h-12 mx-auto mb-4 opacity-20" />
+          <p className="font-medium">Nenhum apoiador encontrado nas suas campanhas.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, onLogout, onNavigateRoot }: { user: User, onSelectCampaign: (c: Campaign) => void, globalSettings: any, onRefreshSettings: () => void, onLogout: () => void, onNavigateRoot?: (page: string) => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -8294,131 +8433,16 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
             </div>
           </div>
         );
-      case 'supporters': {
-        // Agrupar pedidos por campanha — bloco {} necessário para evitar erro de declaração em switch/case
-        const campaignsMap = new Map();
-
-        orders.forEach(o => {
-          if (!o.campaign_id) return;
-          if (!campaignsMap.has(o.campaign_id)) {
-            const campaignObj = campaigns.find(c => c.id === o.campaign_id);
-            campaignsMap.set(o.campaign_id, {
-              title: campaignObj?.title || 'Campanha Desconhecida',
-              supporters: new Map()
-            });
-          }
-
-          const camp = campaignsMap.get(o.campaign_id);
-          const supKey = o.customer_email || o.customer_phone || o.customer_name;
-          if (!supKey) return;
-
-          if (!camp.supporters.has(supKey)) {
-            camp.supporters.set(supKey, {
-              name: o.customer_name || 'Sem Nome',
-              email: o.customer_email,
-              phone: o.customer_phone,
-              created_at: o.created_at,
-              transactions: []
-            });
-          }
-          camp.supporters.get(supKey).transactions.push(o);
-        });
-
+      case 'supporters':
         return (
-          <div className="space-y-12">
-            <header className="flex justify-between items-center">
-              <div>
-                <h1 className="text-3xl font-black text-zinc-900">Meus apoiadores</h1>
-                <p className="text-zinc-500 font-medium tracking-tight">Organizados por campanha</p>
-              </div>
-              <div className="flex gap-4">
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Buscar apoiador..."
-                    value={supporterSearch}
-                    onChange={e => setSupporterSearch(e.target.value)}
-                    className="bg-white border border-zinc-100 rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-orange w-64"
-                  />
-                </div>
-              </div>
-            </header>
-
-            {Array.from(campaignsMap.values()).map((campData, campIdx) => {
-              let supportersList = Array.from((campData as any).supporters.values()) as any[];
-
-              // Filtrar cancelados
-              supportersList = supportersList.filter(s =>
-                s.transactions.some((t: any) => t.status !== 'cancelled' && t.status !== 'expired')
-              );
-
-              // Busca
-              if (supporterSearch) {
-                const lowerSearch = supporterSearch.toLowerCase();
-                supportersList = supportersList.filter(s =>
-                  (s.name && s.name.toLowerCase().includes(lowerSearch)) ||
-                  (s.email && s.email.toLowerCase().includes(lowerSearch)) ||
-                  (s.phone && s.phone.includes(lowerSearch))
-                );
-              }
-
-              if (supportersList.length === 0) return null;
-
-              return (
-                <section key={campIdx} className="space-y-6">
-                  <div className="flex items-center gap-4">
-                    <div className="h-px flex-1 bg-zinc-100"></div>
-                    <h2 className="text-sm font-black text-zinc-400 uppercase tracking-[0.2em] px-4 bg-zinc-50/50 py-1 rounded-full border border-zinc-100">
-                      {(campData as any).title}
-                    </h2>
-                    <div className="h-px flex-1 bg-zinc-100"></div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {supportersList.map((sup, idx) => {
-                      const pendingOrders = sup.transactions.filter((t: any) => t.status === 'pending' || t.status === 'waiting' || t.status === 'pending_approval');
-                      const hasPending = pendingOrders.length > 0;
-
-                      return (
-                        <div key={idx} onClick={() => setSelectedSupporter(sup)} className="glass-card p-6 space-y-4 cursor-pointer hover:border-brand-orange/30 transition-colors relative group">
-                          <div className="flex justify-between items-start">
-                            <h3 className="font-bold text-zinc-900 line-clamp-1">{sup.name}</h3>
-                            <div className="flex items-center gap-2">
-                              {hasPending ? (
-                                <span className="text-[10px] px-2 py-1 bg-amber-50 text-amber-600 font-bold border border-amber-100 rounded-md">Pendente</span>
-                              ) : (
-                                <span className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 font-bold border border-emerald-100 rounded-md">Aprovado</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-zinc-500">
-                              <div className="bg-brand-orange/10 p-1.5 rounded-lg text-brand-orange"><TrendingUp className="w-4 h-4" /></div>
-                              {sup.phone || 'Sem Telefone'}
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-zinc-500">
-                              <div className="bg-blue-50 p-1.5 rounded-lg text-blue-600"><Users className="w-4 h-4" /></div>
-                              {sup.email || 'Sem E-mail'}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
-
-            {campaignsMap.size === 0 && (
-              <div className="py-24 text-center text-zinc-400 bg-white rounded-[2.5rem] border border-zinc-100 border-dashed">
-                <Users className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                <p className="font-medium">Nenhum apoiador encontrado nas suas campanhas.</p>
-              </div>
-            )}
-          </div>
+          <SupportersView
+            orders={orders}
+            campaigns={campaigns}
+            supporterSearch={supporterSearch}
+            setSupporterSearch={setSupporterSearch}
+            setSelectedSupporter={setSelectedSupporter}
+          />
         );
-      }
       case 'settings':
         if (settingsTab === 'profile') return (
           <div className="space-y-8">
