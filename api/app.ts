@@ -268,6 +268,7 @@ type AppOptions = {
 export async function createApp(options: AppOptions = {}) {
   const includeFrontend = options.includeFrontend ?? true;
   const app = express();
+  let viteInstance: any = null;
 
   console.log("Servidor iniciado. Banco de dados local SQLite desativado, utilizando somente Supabase.");
 
@@ -337,12 +338,13 @@ export async function createApp(options: AppOptions = {}) {
   async function serveWithSeo(req: express.Request, res: express.Response, next: express.NextFunction, type: "home" | "rifa" | "page") {
     try {
       let htmlPath = "";
-      const pathsToTry = [
+      const pathsToTry = process.env.NODE_ENV === "production" ? [
         path.join(process.cwd(), "dist", "index.html"),
-        path.join(process.cwd(), "index.html"),
         path.join(__dirname, "dist", "index.html"),
+        path.join(__dirname, "..", "dist", "index.html")
+      ] : [
+        path.join(process.cwd(), "index.html"),
         path.join(__dirname, "index.html"),
-        path.join(__dirname, "..", "dist", "index.html"),
         path.join(__dirname, "..", "index.html")
       ];
 
@@ -364,6 +366,14 @@ export async function createApp(options: AppOptions = {}) {
       } catch (err) {
         console.error(`Erro ao ler index.html em ${htmlPath}:`, err);
         return next();
+      }
+
+      if (viteInstance) {
+        try {
+          html = await viteInstance.transformIndexHtml(req.originalUrl, html);
+        } catch (viteErr) {
+          console.error("Erro ao aplicar transformIndexHtml do Vite:", viteErr);
+        }
       }
 
       // Buscar configurações globais
@@ -2222,11 +2232,15 @@ Sitemap: ${siteUrl}/sitemap.xml`;
       server: { middlewareMode: true },
       appType: "spa",
     });
+    viteInstance = vite;
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+    const distPath = fs.existsSync(path.join(process.cwd(), "dist")) 
+      ? path.join(process.cwd(), "dist") 
+      : path.join(__dirname, "..", "dist");
+    app.use(express.static(distPath));
+    app.get("*any", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 

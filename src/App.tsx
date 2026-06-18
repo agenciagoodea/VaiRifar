@@ -634,11 +634,20 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
     script.src = "https://sdk.mercadopago.com/js/v2";
     script.async = true;
     document.body.appendChild(script);
-
     return () => {
       // Keep script for potential reuse
     };
   }, [paymentMethod]);
+
+  // Redirecionamento automático ao confirmar o pagamento com sucesso (após 3s)
+  useEffect(() => {
+    if (checkoutStep === 'success') {
+      const timer = setTimeout(() => {
+        window.location.href = `/rifa/${campaign.slug || campaign.id}`;
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [checkoutStep, campaign]);
 
   // Format inputs helpers
   const handleCpfChange = (val: string) => {
@@ -10509,7 +10518,14 @@ export default function App() {
     } catch (e) { /* ignorar */ }
     return 'home';
   });
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem('rifapro-user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   
@@ -10718,7 +10734,7 @@ export default function App() {
           const currentUser = userRef.current;
           // Se já temos o cache e o ID bate, não precisamos buscar perfil de novo 
           // a menos que seja uma mudança de estado crítica (como SIGNED_IN)
-          if (currentUser?.id === session.user.id && event !== 'SIGNED_IN') {
+          if (currentUser?.id === session.user.id && event !== 'SIGNED_IN' && event !== 'USER_UPDATED') {
              return;
           }
 
@@ -10881,6 +10897,9 @@ export default function App() {
         } else {
           setUser(null);
           await clearLocalAuthState();
+          if (pathname === '/dashboard') {
+            setPage('login');
+          }
         }
       } catch (err) {
         console.error('Erro na inicialização:', err);
