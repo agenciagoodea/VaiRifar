@@ -7791,7 +7791,11 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const [stats, setStats] = useState<any>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return localStorage.getItem('rifapro-dashboard-tab') || 'dashboard';
+    } catch { return 'dashboard'; }
+  });
   const [settingsTab, setSettingsTab] = useState<string | null>(null);
   const [selectedCampaignForManagement, setSelectedCampaignForManagement] = useState<Campaign | null>(null);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
@@ -9180,6 +9184,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
             setShowCreate(true);
           } else {
             setActiveTab(tab);
+            try { localStorage.setItem('rifapro-dashboard-tab', tab); } catch { /* ignorar */ }
           }
         }}
         onLogout={onLogout}
@@ -10381,7 +10386,29 @@ const LGPDFormPage = ({ onNavigate, settings }: { onNavigate: (page: string) => 
 // --- Main App ---
 
 export default function App() {
-  const [page, setPage] = useState('home');
+  // Inicializa page do localStorage para evitar flash home→dashboard ao atualizar
+  const [page, setPage] = useState(() => {
+    try {
+      // Se há usuário em cache, começa no dashboard para evitar flash
+      const cachedUser = localStorage.getItem('rifapro-user');
+      if (cachedUser) {
+        // Verifica se a URL atual é especial (rifa, política, etc.)
+        const pathname = window.location.pathname;
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('recovery') || pathname === '/reset-password') return 'reset-password';
+        if (pathname.startsWith('/rifa/')) return 'campaign-details';
+        if (urlParams.get('rifa')) return 'campaign-details';
+        if (pathname === '/politica-de-privacidade') return 'privacy-policy';
+        if (pathname === '/termos-de-uso') return 'terms-of-use';
+        if (pathname === '/politica-de-cookies') return 'cookies-policy';
+        if (pathname === '/lgpd') return 'lgpd-form';
+        if (pathname === '/login') return 'login';
+        // Usuário logado e sem URL especial → vai direto pro dashboard
+        return 'dashboard';
+      }
+    } catch (e) { /* ignorar */ }
+    return 'home';
+  });
   const [user, setUser] = useState<User | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
@@ -10619,7 +10646,11 @@ export default function App() {
             setUser(userData);
             localStorage.setItem('rifapro-user', JSON.stringify(userData));
             const currentPage = pageRef.current;
-            if (currentPage === 'login' || currentPage === 'home') setPage('dashboard');
+            // Só redireciona pro dashboard se estiver em páginas de entrada (login/home)
+            // NUNCA redireciona se já está no dashboard ou em outra seção
+            if (currentPage === 'login' || currentPage === 'home') {
+              setPage('dashboard');
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
@@ -10738,11 +10769,12 @@ export default function App() {
             setUser(userData);
             localStorage.setItem('rifapro-user', JSON.stringify(userData));
             
-            // Se o usuário carregar na home mas tiver sessão, manda pro dashboard,
-            // A MENOS QUE ele esteja tentando ver uma rifa específica ou redefinir a senha
+            // Só redireciona pro dashboard se estiver em home ou login
+            // (não redireciona se já está no dashboard ou em outra página)
             if (!selected && !recoveryParam) {
-              if (window.location.pathname === '/' || page === 'home' || page === 'login') {
-                 setPage('dashboard');
+              const currentPage = pageRef.current;
+              if (currentPage === 'home' || currentPage === 'login') {
+                setPage('dashboard');
               }
             }
           }
