@@ -543,6 +543,55 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
   const [pixData, setPixData] = useState<any>(null);
   const [cardResult, setCardResult] = useState<any>(null);
   const [checkingPix, setCheckingPix] = useState(false);
+  const [pixCountdown, setPixCountdown] = useState(5);
+  const pixPollRef = React.useRef<any>(null);
+  const pixCountdownRef = React.useRef<any>(null);
+
+  // Polling automático: inicia quando o PIX é gerado
+  useEffect(() => {
+    if (checkoutStep !== 'pix_generated' || !pixData) return;
+
+    let countdown = 5;
+    setPixCountdown(5);
+
+    // Countdown visual a cada 1 segundo
+    pixCountdownRef.current = setInterval(() => {
+      countdown -= 1;
+      setPixCountdown(countdown);
+      if (countdown <= 0) {
+        countdown = 5;
+        setPixCountdown(5);
+      }
+    }, 1000);
+
+    // Verificação real a cada 5 segundos
+    const doPoll = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const res = await fetch(`/api/payments/status/${pixData.id}`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        });
+        const data = await res.json();
+        if (data.success && (data.status === 'paid' || data.status === 'approved')) {
+          clearInterval(pixPollRef.current);
+          clearInterval(pixCountdownRef.current);
+          setCheckoutStep('success');
+          onPublished();
+        }
+      } catch (err) {
+        console.error('Erro no polling PIX:', err);
+      }
+    };
+
+    // Primeira verificação após 5s
+    pixPollRef.current = setInterval(doPoll, 5000);
+
+    return () => {
+      clearInterval(pixPollRef.current);
+      clearInterval(pixCountdownRef.current);
+    };
+  }, [checkoutStep, pixData]);
 
   useEffect(() => {
     try {
@@ -1063,9 +1112,8 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
           </div>
         )}
 
-        {/* STEP: PIX GENERATED */}
         {checkoutStep === 'pix_generated' && pixData && (
-          <div className="p-8 space-y-6 text-center">
+          <div className="p-8 space-y-5 text-center">
             <div className="bg-emerald-50 text-emerald-800 border border-emerald-100 p-4 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider">
               <CheckCircle2 className="w-4 h-4" /> PIX Gerado com sucesso!
             </div>
@@ -1112,17 +1160,41 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
               </div>
             )}
 
-            <div className="space-y-4 pt-4 border-t border-zinc-100">
+            {/* Auto-polling indicator */}
+            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-center gap-3">
+                <div className="relative w-10 h-10 flex-shrink-0">
+                  {/* Spinning ring */}
+                  <svg className="w-10 h-10 -rotate-90" viewBox="0 0 40 40">
+                    <circle cx="20" cy="20" r="16" fill="none" stroke="#e4e4e7" strokeWidth="3" />
+                    <circle
+                      cx="20" cy="20" r="16" fill="none"
+                      stroke="#059669" strokeWidth="3"
+                      strokeDasharray={`${(5 - pixCountdown) / 5 * 100.53} 100.53`}
+                      className="transition-all duration-1000 ease-linear"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-emerald-700">
+                    {pixCountdown}
+                  </span>
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-black text-zinc-900">Verificando pagamento automaticamente</p>
+                  <p className="text-[10px] text-zinc-400 font-medium">Próxima verificação em {pixCountdown}s — pague o PIX acima e aguarde</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-1 border-t border-zinc-100">
               <button
                 type="button"
                 onClick={handleCheckPixStatus}
                 disabled={checkingPix}
-                className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                className="w-full bg-zinc-900 text-white py-4 rounded-2xl font-bold text-sm hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
               >
                 <RefreshCcw className={`w-4 h-4 ${checkingPix ? 'animate-spin' : ''}`} />
-                {checkingPix ? 'Validando...' : 'Já Paguei, Verificar Status'}
+                {checkingPix ? 'Verificando...' : 'Verificar agora'}
               </button>
-              
               <button
                 type="button"
                 onClick={() => setCheckoutStep('init')}
@@ -1136,27 +1208,55 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
 
         {/* STEP: SUCCESS */}
         {checkoutStep === 'success' && (
-          <div className="p-10 text-center space-y-6">
-            <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 shadow-inner">
+          <div className="p-10 text-center space-y-6 relative overflow-hidden">
+            {/* Confete CSS animado */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+              {[...Array(18)].map((_, i) => (
+                <span
+                  key={i}
+                  className="absolute w-2.5 h-2.5 rounded-sm opacity-0"
+                  style={{
+                    left: `${5 + (i % 9) * 11}%`,
+                    top: '-10px',
+                    backgroundColor: ['#059669','#f59e0b','#3b82f6','#ec4899','#8b5cf6','#10b981'][i % 6],
+                    animation: `confettiFall ${1.2 + (i % 4) * 0.3}s ease-in ${(i % 5) * 0.15}s forwards`,
+                    transform: `rotate(${(i * 37) % 360}deg)`,
+                  }}
+                />
+              ))}
+            </div>
+            <style>{`
+              @keyframes confettiFall {
+                0%   { opacity: 0; top: -10px; transform: translateX(0) rotate(0deg); }
+                10%  { opacity: 1; }
+                100% { opacity: 0; top: 100%; transform: translateX(${Math.random() > 0.5 ? '' : '-'}40px) rotate(540deg); }
+              }
+            `}</style>
+
+            <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 shadow-inner animate-bounce">
               <CheckCircle2 className="w-12 h-12" />
             </div>
             
             <div className="space-y-2">
-              <h3 className="text-3xl font-black text-zinc-900">Campanha Ativada!</h3>
-              <p className="text-zinc-500 font-medium max-w-sm mx-auto mt-1">Sua campanha foi paga com sucesso. Ela já está disponível publicamente para vendas!</p>
+              <h3 className="text-3xl font-black text-zinc-900">🎉 Parabéns!</h3>
+              <p className="text-xl font-black text-emerald-600">Campanha Ativada!</p>
+              <p className="text-zinc-500 font-medium max-w-sm mx-auto mt-1">
+                Seu pagamento foi confirmado. Sua campanha já está ao vivo e pronta para receber compras!
+              </p>
             </div>
 
-            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-6 font-mono text-xs text-zinc-600 space-y-1 text-left max-w-xs mx-auto">
+            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 font-mono text-xs text-zinc-600 space-y-1 text-left max-w-xs mx-auto">
               <p><strong>Identificador:</strong> {pixData?.id || cardResult?.id || 'Audit-MP'}</p>
               <p><strong>Método:</strong> {paymentMethod === 'pix' ? 'PIX' : 'Cartão'}</p>
-              <p><strong>Status MP:</strong> approved</p>
+              <p><strong>Status:</strong> <span className="text-emerald-600 font-black">approved ✔</span></p>
             </div>
 
             <button
               onClick={onClose}
-              className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all"
+              className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
             >
-              Começar a Vender
+              <Rocket className="w-5 h-5" />
+              Ir para minha Campanha
             </button>
           </div>
         )}
