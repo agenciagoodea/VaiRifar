@@ -2777,7 +2777,7 @@ const ManageCampaign = ({ campaign, onBack, onView, onEdit, globalSettings, onRe
 
 // --- Pages ---
 
-const HomePage = ({ campaigns, onSelectCampaign, settings }: { campaigns: Campaign[], onSelectCampaign: (c: Campaign) => void, settings: any }) => {
+const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: { campaigns: Campaign[], onSelectCampaign: (c: Campaign) => void, settings: any, onNavigate: (page: string) => void, user: any }) => {
   const activeCampaigns = campaigns.filter(c => c.status === 'active');
   const finishedCampaigns = campaigns.filter(c => c.status === 'finished');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -3021,7 +3021,13 @@ const HomePage = ({ campaigns, onSelectCampaign, settings }: { campaigns: Campai
             </p>
             <div className="pt-2">
               <button
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                onClick={() => {
+                  if (user) {
+                    onNavigate('dashboard');
+                  } else {
+                    onNavigate('login');
+                  }
+                }}
                 className="bg-white text-emerald-800 hover:bg-emerald-50 px-10 py-5 rounded-2xl font-black text-base md:text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-xl shadow-zinc-950/20"
               >
                 Criar Minha Campanha
@@ -10724,7 +10730,7 @@ export default function App() {
         <AnimatePresence mode="wait">
           {page === 'home' && (
             <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <HomePage campaigns={campaigns} onSelectCampaign={handleSelectCampaign} settings={settings} />
+              <HomePage campaigns={campaigns} onSelectCampaign={handleSelectCampaign} settings={settings} onNavigate={setPage} user={user} />
             </motion.div>
           )}
 
