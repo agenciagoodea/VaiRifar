@@ -2929,74 +2929,135 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
   const iconMap: Record<string, any> = { Shield, Zap, Star, Globe, Users, CheckCircle2, Rocket, Gift, DollarSign, Ticket, Clock, Eye, Trophy };
 
   return (
-    <div className="w-full min-h-screen bg-[#fafbfe] relative overflow-hidden pb-12">
-      {/* Background decorative elements */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute top-[400px] right-1/4 w-[600px] h-[600px] bg-amber-500/5 rounded-full blur-[150px] pointer-events-none" />
+    <div className="w-full min-h-screen bg-[#090d16] text-zinc-100 relative overflow-hidden pb-24">
+      {/* Elementos decorativos em background */}
+      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-[400px] right-1/4 w-[700px] h-[700px] bg-amber-500/5 rounded-full blur-[160px] pointer-events-none" />
+      <div className="absolute top-[1200px] left-10 w-[400px] h-[400px] bg-emerald-600/5 rounded-full blur-[120px] pointer-events-none" />
 
       {/* HERO SECTION */}
-      <section className="relative pt-20 pb-20 px-4 max-w-7xl mx-auto text-center space-y-10">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-40 pointer-events-none -z-10" />
+      <section className="relative pt-24 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f2937_1px,transparent_1px),linear-gradient(to_bottom,#1f2937_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-30 pointer-events-none -z-10" />
         
-        <div className="space-y-6 max-w-4xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100/80 text-xs font-bold shadow-sm tracking-wide uppercase">
-            <Zap className="w-3.5 h-3.5 text-emerald-600 animate-pulse" /> Sorteios Rápidos & 100% Seguros
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          {/* Texto do Hero */}
+          <div className="space-y-8 lg:col-span-7 text-left">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold shadow-sm tracking-wide uppercase">
+              <Zap className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> Sorteios Rápidos & 100% Seguros
+            </div>
+            
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-none text-white">
+              Sua sorte está a <br />
+              <span className="bg-gradient-to-r from-emerald-400 via-teal-400 to-amber-300 bg-clip-text text-transparent">
+                um clique de distância
+              </span>
+            </h1>
+            
+            <p className="text-zinc-400 text-lg md:text-xl font-medium max-w-xl leading-relaxed">
+              Participe de campanhas totalmente transparentes e auditáveis. Concorra a prêmios incríveis e compre suas cotas em segundos via Pix.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+              <a
+                href="#campanhas"
+                className="bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-zinc-950 font-extrabold text-base px-8 py-4 rounded-2xl shadow-lg shadow-emerald-500/20 hover:scale-[1.03] active:scale-[0.97] transition-all text-center flex items-center justify-center gap-2"
+              >
+                <Ticket className="w-5 h-5 text-zinc-950" /> Explorar Campanhas
+              </a>
+              <button
+                onClick={() => {
+                  const el = document.getElementById('como-funciona');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 font-bold text-base px-8 py-4 rounded-2xl hover:scale-[1.03] active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+              >
+                <Clock className="w-5 h-5 text-zinc-500" /> Como Funciona?
+              </button>
+            </div>
+
+            {/* Micro Stats no Hero */}
+            <div className="grid grid-cols-3 gap-6 pt-6 border-t border-zinc-800/80 max-w-lg">
+              <div>
+                <p className="text-2xl sm:text-3xl font-black text-white bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">100%</p>
+                <p className="text-zinc-550 text-xs mt-1">Automatizado via Pix</p>
+              </div>
+              <div>
+                <p className="text-2xl sm:text-3xl font-black text-white bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Auditorias</p>
+                <p className="text-zinc-550 text-xs mt-1">Sorteios Seguros</p>
+              </div>
+              <div>
+                <p className="text-2xl sm:text-3xl font-black text-white bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Instantâneo</p>
+                <p className="text-zinc-550 text-xs mt-1">Cotas geradas na hora</p>
+              </div>
+            </div>
           </div>
-          
-          <h1 className="text-5xl md:text-7xl font-black text-zinc-900 tracking-tight leading-tight">
-            Sua sorte está a <br />
-            <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">um clique de distância</span>
-          </h1>
-          
-          <p className="text-zinc-500 text-lg md:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
-            Participe de campanhas auditadas, transparentes e concorra a prêmios incríveis. Compre suas cotas em segundos via Pix.
-          </p>
-        </div>
 
-        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 max-w-md mx-auto pt-4">
-          <a
-            href="#campanhas"
-            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl font-bold text-base shadow-xl shadow-emerald-600/10 hover:shadow-emerald-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-center"
-          >
-            Explorar Sorteios
-          </a>
-          <button
-            onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-            className="w-full sm:w-auto bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-600 px-8 py-4 rounded-2xl font-bold text-base hover:scale-[1.02] active:scale-[0.98] transition-all shadow-sm"
-          >
-            Como Funciona?
-          </button>
-        </div>
+          {/* Imagem do Mockup do App */}
+          <div className="lg:col-span-5 relative flex justify-center">
+            {/* Efeito de brilho de fundo */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-amber-500/10 rounded-full blur-3xl opacity-60 -z-10" />
+            <div className="relative group max-w-xs md:max-w-sm">
+              <img
+                src="/app-mockup.png"
+                alt="Aplicativo VaiRifar"
+                className="rounded-[2.5rem] shadow-2xl shadow-zinc-950/80 border-4 border-zinc-800 hover:scale-[1.02] transition-transform duration-500"
+              />
+              {/* Flutuante de Sucesso / Pix */}
+              <div className="absolute -right-6 top-1/4 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 p-4 rounded-2xl flex items-center gap-3 shadow-xl animate-bounce">
+                <div className="p-2 bg-emerald-500/20 text-emerald-450 rounded-xl">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Última Compra</p>
+                  <p className="text-sm font-black text-white">Pix Confirmado!</p>
+                </div>
+              </div>
 
-        {/* HERO TRUST RIBBON */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12 max-w-5xl mx-auto text-left">
-          <div className="bg-white/60 backdrop-blur-md p-6 rounded-3xl border border-zinc-100 flex items-start gap-4 shadow-sm hover:shadow-md transition-all">
-            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shrink-0">
+              {/* Flutuante de Ganhador */}
+              <div className="absolute -left-6 bottom-1/4 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 p-4 rounded-2xl flex items-center gap-3 shadow-xl">
+                <div className="p-2 bg-amber-500/20 text-amber-450 rounded-xl">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Resultado</p>
+                  <p className="text-sm font-black text-white">Cota Sorteada!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* TRUST BENEFITS RIBBON */}
+      <section className="bg-zinc-900/40 backdrop-blur-sm border-y border-zinc-900/80 py-10 px-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
+          <div className="flex items-start gap-4 p-4 rounded-2xl hover:bg-zinc-900/30 transition-all">
+            <div className="p-3.5 bg-emerald-500/10 rounded-2xl text-emerald-450 shrink-0 border border-emerald-500/10">
               <Shield className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-zinc-900 text-base">Compra Garantida</h4>
-              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">Seus bilhetes são vinculados diretamente ao seu CPF e confirmados automaticamente.</p>
+              <h4 className="font-bold text-white text-base">Compra 100% Segura</h4>
+              <p className="text-zinc-500 text-sm mt-1 leading-relaxed">Os bilhetes são gerados diretamente para o seu CPF e vinculados ao sorteio oficial.</p>
             </div>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-md p-6 rounded-3xl border border-zinc-100 flex items-start gap-4 shadow-sm hover:shadow-md transition-all">
-            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shrink-0">
+          <div className="flex items-start gap-4 p-4 rounded-2xl hover:bg-zinc-900/30 transition-all">
+            <div className="p-3.5 bg-teal-500/10 rounded-2xl text-teal-450 shrink-0 border border-teal-500/10">
               <Zap className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-zinc-900 text-base">PIX Instantâneo</h4>
-              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">Sem burocracia. O pagamento e a emissão das cotas acontecem no mesmo minuto.</p>
+              <h4 className="font-bold text-white text-base">Confirmação Imediata</h4>
+              <p className="text-zinc-500 text-sm mt-1 leading-relaxed">Pagamento via Pix verificado automaticamente. Suas cotas são liberadas em segundos.</p>
             </div>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-md p-6 rounded-3xl border border-zinc-100 flex items-start gap-4 shadow-sm hover:shadow-md transition-all">
-            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shrink-0">
+          <div className="flex items-start gap-4 p-4 rounded-2xl hover:bg-zinc-900/30 transition-all">
+            <div className="p-3.5 bg-amber-500/10 rounded-2xl text-amber-450 shrink-0 border border-amber-500/10">
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-zinc-900 text-base">Resultados Auditados</h4>
-              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">Sorteios transparentes com extração auditável e divulgação pública de ganhadores.</p>
+              <h4 className="font-bold text-white text-base">Sorteio Transparente</h4>
+              <p className="text-zinc-500 text-sm mt-1 leading-relaxed">Extração baseada na Loteria Federal ou auditoria aberta. Acompanhe tudo ao vivo.</p>
             </div>
           </div>
         </div>
@@ -3004,14 +3065,14 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* FINISHED CAMPAIGNS (RECENT WINNERS) */}
       {finishedCampaigns.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-in fade-in slide-in-from-top-8 duration-700">
-          <div className="flex items-center gap-4 mb-10">
-            <div className="bg-amber-400 p-3 rounded-2xl shadow-lg shadow-amber-400/10 text-white">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+          <div className="flex items-center gap-4 mb-12">
+            <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-3 rounded-2xl shadow-lg shadow-amber-500/20 text-zinc-950">
               <Trophy className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Ganhadores Recentes</h2>
-              <p className="text-zinc-400 font-medium">Confira quem já levou os prêmios para casa!</p>
+              <h2 className="text-3xl font-black text-white tracking-tight">Ganhadores Recentes</h2>
+              <p className="text-zinc-500 font-medium mt-1">Conheça quem acreditou e levou prêmios espetaculares!</p>
             </div>
           </div>
           
@@ -3023,31 +3084,31 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                 <div
                   key={c.id}
                   onClick={() => onSelectCampaign(c)}
-                  className="bg-white rounded-[2rem] border border-amber-100/60 p-6 bg-gradient-to-br from-white to-amber-50/10 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group relative overflow-hidden"
+                  className="bg-zinc-900/60 backdrop-blur-md rounded-[2rem] border border-zinc-800 p-6 shadow-xl hover:shadow-2xl hover:scale-[1.02] hover:border-amber-500/30 transition-all cursor-pointer group relative overflow-hidden"
                 >
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-amber-400/5 rounded-bl-[4rem] pointer-events-none" />
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-bl-[4rem] pointer-events-none" />
                   
                   <div className="relative mb-6">
                     <img
                       src={c.image_url || `https://picsum.photos/seed/${c.id}/600/400`}
                       alt={c.title}
-                      className="w-full h-32 object-cover rounded-2xl opacity-40 group-hover:opacity-70 transition-opacity duration-300"
+                      className="w-full h-36 object-cover rounded-2xl opacity-50 group-hover:opacity-80 transition-opacity duration-300"
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-20 h-20 bg-white rounded-full flex flex-col items-center justify-center text-zinc-900 shadow-xl border-4 border-amber-400">
-                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest leading-none">Cota</span>
+                      <div className="w-20 h-20 bg-zinc-950 rounded-full flex flex-col items-center justify-center text-white shadow-2xl border-4 border-amber-500">
+                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest leading-none">Cota</span>
                         <span className="text-2xl font-black mt-0.5 leading-none">{firstWinner?.number || '---'}</span>
                       </div>
                     </div>
-                    <div className="absolute top-2 right-2 bg-zinc-900 text-white text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    <div className="absolute top-2 right-2 bg-amber-500 text-zinc-950 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
                       Sorteado
                     </div>
                   </div>
 
-                  <div className="text-center space-y-2">
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] truncate">{c.title}</p>
-                    <h3 className="text-xl font-black text-zinc-900 truncate leading-tight">{firstWinner?.customer || 'Ganhador'}</h3>
-                    <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-100 text-amber-700 px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wide">
+                  <div className="text-center space-y-3">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] truncate">{c.title}</p>
+                    <h3 className="text-xl font-black text-white truncate leading-tight group-hover:text-amber-300 transition-colors">{firstWinner?.customer || 'Ganhador'}</h3>
+                    <div className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wide">
                       <Gift className="w-3.5 h-3.5 shrink-0" /> {firstWinner?.prize_name || 'Prêmio'}
                     </div>
                   </div>
@@ -3059,14 +3120,14 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       )}
 
       {/* ACTIVE CAMPAIGNS */}
-      <section id="campanhas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-24">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+      <section id="campanhas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 scroll-mt-24">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wider mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 text-[10px] font-black uppercase tracking-wider mb-3">
               ⚡ Sorteios Ativos
             </div>
-            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Campanhas em Destaque</h2>
-            <p className="text-zinc-400 font-medium mt-1">Garanta sua participação antes que as cotas esgotem!</p>
+            <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Campanhas em Destaque</h2>
+            <p className="text-zinc-550 font-medium mt-1">Selecione uma campanha ativa, escolha seus números e garanta sua chance!</p>
           </div>
         </div>
 
@@ -3076,12 +3137,12 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
           ))}
           
           {activeCampaigns.length === 0 && (
-            <div className="col-span-full py-24 text-center bg-white rounded-[2.5rem] border border-zinc-100 shadow-sm max-w-xl mx-auto px-6">
-              <div className="w-20 h-20 bg-zinc-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-zinc-100/50">
-                <Ticket className="w-8 h-8 text-zinc-300" />
+            <div className="col-span-full py-24 text-center bg-zinc-900/50 rounded-[2.5rem] border border-zinc-850 shadow-xl max-w-xl mx-auto px-6">
+              <div className="w-20 h-20 bg-zinc-800 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-zinc-700/50">
+                <Ticket className="w-8 h-8 text-zinc-600" />
               </div>
-              <h3 className="text-xl font-black text-zinc-900 mb-2">Nenhuma campanha ativa no momento</h3>
-              <p className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed">Novas campanhas estão sendo preparadas pelos organizadores. Volte em breve para participar!</p>
+              <h3 className="text-xl font-black text-white mb-2">Nenhuma campanha ativa no momento</h3>
+              <p className="text-zinc-550 text-sm max-w-xs mx-auto leading-relaxed">Novas campanhas estão sendo preparadas pelos organizadores. Volte em breve para participar!</p>
             </div>
           )}
         </div>
@@ -3089,10 +3150,12 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* HOW IT WORKS */}
       {howItWorks.length > 0 && (
-        <section id="como-funciona" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-24">
-          <div className="text-center mb-16 space-y-2">
-            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Como Funciona</h2>
-            <p className="text-zinc-500 font-medium">É muito simples e rápido participar dos nossos sorteios!</p>
+        <section id="como-funciona" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-mt-24">
+          <div className="text-center mb-16 space-y-3">
+            <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Como Funciona</h2>
+            <p className="text-zinc-550 font-medium max-w-md mx-auto leading-relaxed">
+              Você cria ou participa de sorteios em poucas etapas de forma totalmente intuitiva.
+            </p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -3103,13 +3166,13 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-white rounded-[2rem] border border-zinc-100 p-8 shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+                className="bg-zinc-900/40 backdrop-blur-md rounded-[2rem] border border-zinc-850 p-8 shadow-xl hover:shadow-2xl hover:border-emerald-500/20 transition-all relative overflow-hidden group"
               >
                 <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-[5rem] pointer-events-none" />
-                <div className="w-14 h-14 bg-emerald-50 text-emerald-700 rounded-2xl flex items-center justify-center font-black text-xl mb-6 shadow-sm border border-emerald-100/50 group-hover:scale-110 transition-transform">
+                <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center font-black text-2xl mb-6 shadow-inner border border-emerald-500/20 group-hover:scale-110 group-hover:bg-emerald-500 group-hover:text-zinc-950 transition-all duration-300">
                   {i + 1}
                 </div>
-                <h3 className="text-xl font-bold text-zinc-900 mb-3">{step.title}</h3>
+                <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
                 <p className="text-zinc-400 text-sm leading-relaxed">{step.text}</p>
               </motion.div>
             ))}
@@ -3119,10 +3182,10 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* FEATURES */}
       {features.length > 0 && (
-        <section id="vantagens" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-24">
-          <div className="text-center mb-16 space-y-2">
-            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Tudo que Você Precisa</h2>
-            <p className="text-zinc-500 font-medium">Oferecemos recursos premium para dar total segurança aos participantes.</p>
+        <section id="vantagens" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 scroll-mt-24">
+          <div className="text-center mb-16 space-y-3">
+            <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Recursos Premium</h2>
+            <p className="text-zinc-550 font-medium">Tudo o que você precisa para uma campanha de sucesso ou compra confiável.</p>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
@@ -3135,12 +3198,12 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.05 }}
-                  className="bg-white rounded-3xl border border-zinc-100 p-6 text-center shadow-sm hover:shadow-lg hover:scale-105 transition-all group"
+                  className="bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-850 p-6 text-center shadow-md hover:shadow-xl hover:scale-105 hover:border-emerald-500/20 transition-all group"
                 >
-                  <div className="w-14 h-14 bg-emerald-50/50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-600 border border-emerald-100/20 group-hover:scale-110 transition-transform">
+                  <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-450 border border-emerald-500/15 group-hover:scale-110 transition-transform">
                     <Ic className="w-6 h-6" />
                   </div>
-                  <p className="font-bold text-zinc-900 text-sm tracking-tight">{feat.title}</p>
+                  <p className="font-bold text-white text-sm tracking-tight">{feat.title}</p>
                 </motion.div>
               );
             })}
@@ -3148,19 +3211,32 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
         </section>
       )}
 
-      {/* CTA SECTION */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-gradient-to-br from-emerald-800 via-emerald-900 to-zinc-950 rounded-[3rem] p-10 md:p-20 text-center text-white relative overflow-hidden shadow-2xl">
+      {/* CTA SECTION WITH BACKGROUND IMAGE */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="relative bg-zinc-950 rounded-[3rem] p-10 md:p-20 text-center text-white overflow-hidden shadow-2xl border border-zinc-800">
+          {/* Imagem de celebração com overlay gradiente para contraste legível do texto */}
+          <div className="absolute inset-0 z-0">
+            <img
+              src="/winner-celebration.png"
+              alt="Celebração"
+              className="w-full h-full object-cover opacity-20"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent" />
+          </div>
+
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(16,185,129,0.15),transparent_100%)] pointer-events-none" />
           <div className="absolute -top-48 -left-48 w-96 h-96 bg-emerald-600/10 blur-[120px] rounded-full pointer-events-none" />
           <div className="absolute -bottom-48 -right-48 w-96 h-96 bg-teal-500/10 blur-[120px] rounded-full pointer-events-none" />
 
-          <div className="relative z-10 max-w-2xl mx-auto space-y-8">
-            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight">{ctaText}</h2>
-            <p className="text-emerald-100/70 text-base md:text-lg font-medium leading-relaxed">
-              Inicie agora mesmo sua campanha na plataforma de rifas mais segura e automatizada do mercado.
+          <div className="relative z-10 max-w-3xl mx-auto space-y-8">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold shadow-sm uppercase tracking-wider mx-auto">
+              🏆 Comece Hoje
+            </div>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight max-w-2xl mx-auto">{ctaText}</h2>
+            <p className="text-zinc-400 text-base md:text-lg font-medium leading-relaxed max-w-xl mx-auto">
+              Crie campanhas ilimitadas e gerencie pagamentos Pix com relatórios detalhados em tempo real na plataforma preferida dos brasileiros.
             </p>
-            <div className="pt-2">
+            <div className="pt-4">
               <button
                 onClick={() => {
                   if (user) {
@@ -3169,9 +3245,9 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                     onNavigate('login');
                   }
                 }}
-                className="bg-white text-emerald-800 hover:bg-emerald-50 px-10 py-5 rounded-2xl font-black text-base md:text-lg hover:scale-105 active:scale-[0.98] transition-all shadow-xl shadow-zinc-950/20"
+                className="bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-zinc-950 font-black text-base md:text-lg px-12 py-5 rounded-2xl hover:scale-105 active:scale-[0.98] transition-all shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-3 mx-auto"
               >
-                Criar Minha Campanha
+                <Rocket className="w-5 h-5 text-zinc-950" /> Criar Minha Campanha
               </button>
             </div>
           </div>
@@ -3180,21 +3256,21 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* FAQ SECTION */}
       {faqItems.length > 0 && (
-        <section id="duvidas" className="max-w-3xl mx-auto px-4 py-12 scroll-mt-24">
-          <div className="text-center mb-12 space-y-2">
-            <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Dúvidas Frequentes</h2>
-            <p className="text-zinc-500 font-medium">Tudo o que você precisa saber sobre como participar ou organizar sorteios.</p>
+        <section id="duvidas" className="max-w-4xl mx-auto px-4 py-20 scroll-mt-24">
+          <div className="text-center mb-16 space-y-3">
+            <h2 className="text-3xl font-black text-white tracking-tight">Dúvidas Frequentes</h2>
+            <p className="text-zinc-550 font-medium">Tudo o que você precisa saber sobre a segurança, criação ou compra de rifas.</p>
           </div>
           
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 max-w-3xl mx-auto">
             {faqItems.map((faq: any, i: number) => (
-              <div key={i} className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden transition-all">
+              <div key={i} className="bg-zinc-900/40 backdrop-blur-md rounded-2xl border border-zinc-800 shadow-md overflow-hidden transition-all hover:border-zinc-700">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full px-6 py-5 text-left flex items-center justify-between hover:bg-zinc-50/50 transition-all focus:outline-none"
+                  className="w-full px-6 py-5 text-left flex items-center justify-between hover:bg-zinc-800/30 transition-all focus:outline-none"
                 >
-                  <span className="font-bold text-zinc-800 text-sm md:text-base leading-snug">{faq.question}</span>
-                  <ChevronDown className={`w-5 h-5 text-zinc-400 shrink-0 transition-transform duration-300 ${openFaq === i ? 'rotate-180 text-emerald-600' : ''}`} />
+                  <span className="font-bold text-white text-sm md:text-base leading-snug">{faq.question}</span>
+                  <ChevronDown className={`w-5 h-5 text-zinc-400 shrink-0 transition-transform duration-300 ${openFaq === i ? 'rotate-180 text-emerald-400' : ''}`} />
                 </button>
                 <AnimatePresence initial={false}>
                   {openFaq === i && (
@@ -3204,7 +3280,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.25, ease: 'easeInOut' }}
                     >
-                      <div className="px-6 pb-6 text-zinc-500 text-xs md:text-sm leading-relaxed border-t border-zinc-50 pt-4">
+                      <div className="px-6 pb-6 text-zinc-400 text-xs md:text-sm leading-relaxed border-t border-zinc-800/60 pt-4">
                         {faq.answer}
                       </div>
                     </motion.div>
