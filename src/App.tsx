@@ -1834,7 +1834,7 @@ const ManageCampaign = ({ campaign, onBack, onView, onEdit, globalSettings, onRe
           current.tickets += (o.reserved_numbers?.length || o.ticket_count || 0);
         });
 
-        const sortedRanking = Array.from(rakingMap.values())
+        const sortedRanking = Array.from(rakingMap.values() as Iterable<{ name: string; tickets: number }>)
           .sort((a, b) => b.tickets - a.tickets)
           .map((item, index) => ({ ...item, rank: index + 1 }));
 
@@ -8294,8 +8294,8 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
             </div>
           </div>
         );
-      case 'supporters':
-        // Agrupar pedidos por campanha
+      case 'supporters': {
+        // Agrupar pedidos por campanha — bloco {} necessário para evitar erro de declaração em switch/case
         const campaignsMap = new Map();
 
         orders.forEach(o => {
@@ -8346,7 +8346,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
             </header>
 
             {Array.from(campaignsMap.values()).map((campData, campIdx) => {
-              let supportersList = Array.from(campData.supporters.values()) as any[];
+              let supportersList = Array.from((campData as any).supporters.values()) as any[];
 
               // Filtrar cancelados
               supportersList = supportersList.filter(s =>
@@ -8370,7 +8370,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                   <div className="flex items-center gap-4">
                     <div className="h-px flex-1 bg-zinc-100"></div>
                     <h2 className="text-sm font-black text-zinc-400 uppercase tracking-[0.2em] px-4 bg-zinc-50/50 py-1 rounded-full border border-zinc-100">
-                      {campData.title}
+                      {(campData as any).title}
                     </h2>
                     <div className="h-px flex-1 bg-zinc-100"></div>
                   </div>
@@ -8418,6 +8418,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
             )}
           </div>
         );
+      }
       case 'settings':
         if (settingsTab === 'profile') return (
           <div className="space-y-8">
@@ -9661,10 +9662,14 @@ const LoginPage = ({ onLogin, onNavigate }: { onLogin: (u: User) => void, onNavi
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
+      // Sempre usa o domínio de produção para evitar redirect para localhost
+      const prodOrigin = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'https://www.vairifar.com.br'
+        : window.location.origin;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`
+          redirectTo: `${prodOrigin}/`
         }
       });
       if (error) throw error;
