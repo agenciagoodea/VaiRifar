@@ -2953,28 +2953,54 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
   const showcaseProgress = showcaseCampaign
     ? Math.min(100, Math.round(((showcaseCampaign.sold_count || 0) / Math.max(showcaseCampaign.total_tickets || 1, 1)) * 100))
     : 68;
+  const primaryColor = settings?.primary_color || '#00d18e';
+  const secondaryColor = settings?.secondary_color || '#ff6321';
+  const buttonColor = settings?.button_color || secondaryColor;
+  const backgroundColor = settings?.background_color || '#fafafa';
+  const textColor = settings?.text_color || '#18181b';
+  const hexToRgba = (hex: string, alpha: number) => {
+    const value = hex.replace('#', '');
+    const normalized = value.length === 3
+      ? value.split('').map(char => char + char).join('')
+      : value.padEnd(6, '0').slice(0, 6);
+    const red = parseInt(normalized.slice(0, 2), 16);
+    const green = parseInt(normalized.slice(2, 4), 16);
+    const blue = parseInt(normalized.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+  };
 
   return (
-    <div className="w-full min-h-screen bg-[#fffaf2] text-zinc-900 relative overflow-hidden pb-24">
-      <div className="absolute inset-x-0 top-0 h-[620px] bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_36%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,#fffaf2_0%,#fffdf8_60%,#fffaf2_100%)] pointer-events-none" />
-      <div className="absolute top-28 left-8 w-40 h-40 rounded-full bg-amber-200/50 blur-3xl pointer-events-none" />
-      <div className="absolute top-44 right-0 w-72 h-72 rounded-full bg-emerald-200/40 blur-3xl pointer-events-none" />
+    <div className="w-full min-h-screen relative overflow-hidden pb-24" style={{ backgroundColor, color: textColor }}>
+      <div
+        className="absolute inset-x-0 top-0 h-[620px] pointer-events-none"
+        style={{
+          background: `radial-gradient(circle at top left, ${hexToRgba(secondaryColor, 0.20)}, transparent 36%), radial-gradient(circle at top right, ${hexToRgba(primaryColor, 0.16)}, transparent 34%), linear-gradient(180deg, ${backgroundColor} 0%, #ffffff 60%, ${backgroundColor} 100%)`
+        }}
+      />
+      <div className="absolute top-28 left-8 w-40 h-40 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: hexToRgba(secondaryColor, 0.24) }} />
+      <div className="absolute top-44 right-0 w-72 h-72 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: hexToRgba(primaryColor, 0.18) }} />
 
       <section className="relative pt-20 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-14 items-center">
           <div className="space-y-8 lg:col-span-6 text-left">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/85 text-amber-700 border border-amber-200 text-xs font-black shadow-sm tracking-[0.18em] uppercase">
+            <div
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/85 text-xs font-black shadow-sm tracking-[0.18em] uppercase"
+              style={{ color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
+            >
               <Trophy className="w-3.5 h-3.5" /> Plataforma clara para rifas e premiações
             </div>
 
             <div className="space-y-5">
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[0.95] text-zinc-950">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[0.95]" style={{ color: textColor }}>
                 Rifas online com
-                <span className="block text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500">
+                <span
+                  className="block text-transparent bg-clip-text"
+                  style={{ backgroundImage: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }}
+                >
                   cara de prêmio grande
                 </span>
               </h1>
-              <p className="text-zinc-600 text-lg md:text-xl font-medium max-w-2xl leading-relaxed">
+              <p className="text-lg md:text-xl font-medium max-w-2xl leading-relaxed" style={{ color: hexToRgba(textColor, 0.76) }}>
                 Crie campanhas bonitas, acompanhe pagamentos por Pix e destaque prêmios reais com uma experiência mais leve, confiável e feita para conversão.
               </p>
             </div>
@@ -2982,7 +3008,8 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
             <div className="flex flex-col sm:flex-row gap-4 pt-1">
               <a
                 href="#campanhas"
-                className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-lg shadow-zinc-900/10 transition-all text-center flex items-center justify-center gap-2"
+                className="text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-lg transition-all text-center flex items-center justify-center gap-2"
+                style={{ backgroundColor: buttonColor, boxShadow: `0 18px 40px ${hexToRgba(buttonColor, 0.22)}` }}
               >
                 <Ticket className="w-5 h-5" /> Ver rifas em destaque
               </a>
@@ -2991,54 +3018,63 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                   const el = document.getElementById('como-funciona');
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="bg-white/90 border border-zinc-200 hover:border-amber-300 text-zinc-900 font-bold text-base px-8 py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                className="bg-white/90 font-bold text-base px-8 py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                style={{ color: textColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
               >
-                <Play className="w-5 h-5 text-amber-500" /> Como funciona
+                <Play className="w-5 h-5" style={{ color: primaryColor }} /> Como funciona
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
               <div className="rounded-[1.75rem] border border-white/80 bg-white/80 backdrop-blur-sm p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                <p className="text-2xl sm:text-3xl font-black text-zinc-950">{activeCampaigns.length}+</p>
-                <p className="text-sm text-zinc-500 mt-1 leading-snug">rifas abertas agora</p>
+                <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{activeCampaigns.length}+</p>
+                <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>rifas abertas agora</p>
               </div>
               <div className="rounded-[1.75rem] border border-white/80 bg-white/80 backdrop-blur-sm p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                <p className="text-2xl sm:text-3xl font-black text-zinc-950">{totalActiveTickets > 0 ? totalActiveTickets : 100}%</p>
-                <p className="text-sm text-zinc-500 mt-1 leading-snug">números prontos para venda</p>
+                <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{totalActiveTickets > 0 ? totalActiveTickets : 100}%</p>
+                <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>números prontos para venda</p>
               </div>
               <div className="rounded-[1.75rem] border border-white/80 bg-white/80 backdrop-blur-sm p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                <p className="text-2xl sm:text-3xl font-black text-zinc-950">{lowestTicketPrice > 0 ? formatCurrency(lowestTicketPrice) : 'Pix'}</p>
-                <p className="text-sm text-zinc-500 mt-1 leading-snug">entrada rápida para participar</p>
+                <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{lowestTicketPrice > 0 ? formatCurrency(lowestTicketPrice) : 'Pix'}</p>
+                <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>entrada rápida para participar</p>
               </div>
             </div>
           </div>
 
           <div className="lg:col-span-6 relative">
-            <div className="relative rounded-[2.5rem] border border-white/80 bg-[linear-gradient(145deg,#fffef9_0%,#fff5df_55%,#ffffff_100%)] p-5 sm:p-7 shadow-[0_30px_80px_rgba(245,158,11,0.16)] overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.18),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.14),transparent_32%)] pointer-events-none" />
+            <div
+              className="relative rounded-[2.5rem] border border-white/80 p-5 sm:p-7 shadow-[0_30px_80px_rgba(245,158,11,0.16)] overflow-hidden"
+              style={{
+                boxShadow: `0 30px 80px ${hexToRgba(buttonColor, 0.18)}`,
+                background: `linear-gradient(145deg, #ffffff 0%, ${hexToRgba(secondaryColor, 0.14)} 55%, #ffffff 100%)`
+              }}
+            >
+              <img src="/hero-bg.png" alt="Troféu dourado com bilhetes de rifa voando" className="absolute inset-0 w-full h-full object-cover opacity-88" />
+              <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${hexToRgba(backgroundColor, 0.92)} 4%, ${hexToRgba(backgroundColor, 0.74)} 44%, ${hexToRgba(textColor, 0.18)} 100%)` }} />
+              <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${hexToRgba(buttonColor, 0.22)}, transparent 30%), radial-gradient(circle at bottom left, ${hexToRgba(primaryColor, 0.18)}, transparent 32%)` }} />
               <div className="relative grid grid-cols-1 md:grid-cols-[1.2fr_0.8fr] gap-5">
-                <div className="rounded-[2rem] bg-white/90 border border-white shadow-sm p-5 space-y-5">
+                <div className="rounded-[2rem] bg-white/88 border border-white shadow-sm p-5 space-y-5 backdrop-blur-md">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-amber-600">Campanha em evidência</p>
-                      <h3 className="text-2xl font-black text-zinc-950 mt-2 leading-tight">
+                      <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: primaryColor }}>Campanha em evidência</p>
+                      <h3 className="text-2xl font-black mt-2 leading-tight" style={{ color: textColor }}>
                         {showcaseCampaign?.title || 'Rifa especial com premiação em destaque'}
                       </h3>
                     </div>
-                    <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center border border-amber-200">
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor, border: `1px solid ${hexToRgba(buttonColor, 0.18)}` }}>
                       <Gift className="w-7 h-7" />
                     </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50 p-4">
+                  <div className="rounded-[1.75rem] p-4" style={{ border: `1px solid ${hexToRgba(buttonColor, 0.14)}`, background: `linear-gradient(90deg, ${hexToRgba(buttonColor, 0.10)}, ${hexToRgba(primaryColor, 0.08)})` }}>
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">Prêmio principal</p>
-                        <p className="text-xl font-black text-zinc-950 mt-1">Premiação de alto impacto</p>
-                        <p className="text-sm text-zinc-600 mt-1">Visual pensado para destacar valor percebido e urgência.</p>
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: hexToRgba(textColor, 0.58) }}>Prêmio principal</p>
+                        <p className="text-xl font-black mt-1" style={{ color: textColor }}>Premiação de alto impacto</p>
+                        <p className="text-sm mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Visual pensado para destacar valor percebido e urgência.</p>
                       </div>
                       <div className="w-20 h-20 rounded-[1.5rem] bg-zinc-950 text-white flex flex-col items-center justify-center shadow-lg">
-                        <Trophy className="w-7 h-7 text-amber-400" />
+                        <Trophy className="w-7 h-7" style={{ color: buttonColor }} />
                         <span className="text-[10px] font-black uppercase tracking-[0.18em] mt-1">Top prize</span>
                       </div>
                     </div>
@@ -3046,7 +3082,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
                   <div className="grid grid-cols-3 gap-3">
                     {['02491', '02492', '02493'].map((ticket, index) => (
-                      <div key={ticket} className={`rounded-2xl border p-3 text-center ${index === 1 ? 'bg-zinc-950 text-white border-zinc-950 shadow-lg' : 'bg-[#fffaf2] text-zinc-900 border-zinc-200'}`}>
+                      <div key={ticket} className={`rounded-2xl border p-3 text-center ${index === 1 ? 'text-white border-zinc-950 shadow-lg' : 'text-zinc-900 border-zinc-200'}`} style={index === 1 ? { backgroundColor: textColor } : { backgroundColor }}>
                         <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-70">Cota</p>
                         <p className="text-lg font-black mt-1">{ticket}</p>
                       </div>
@@ -3059,60 +3095,60 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                       <span>{showcaseProgress}% emitido</span>
                     </div>
                     <div className="h-3 rounded-full bg-zinc-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-emerald-400" style={{ width: `${showcaseProgress}%` }} />
+                      <div className="h-full rounded-full" style={{ width: `${showcaseProgress}%`, background: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }} />
                     </div>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-4">
-                  <div className="rounded-[1.75rem] bg-zinc-950 text-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
+                  <div className="rounded-[1.75rem] text-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.18)]" style={{ backgroundColor: textColor }}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Pagamento</p>
                         <p className="text-xl font-black mt-2">Pix liberado</p>
                       </div>
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-300 flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: hexToRgba(primaryColor, 0.15), color: primaryColor }}>
                         <QrCode className="w-6 h-6" />
                       </div>
                     </div>
                     <div className="mt-5 space-y-3">
                       <div className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
                         <span className="text-sm text-zinc-300">Compra confirmada</span>
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        <CheckCircle2 className="w-5 h-5" style={{ color: primaryColor }} />
                       </div>
                       <div className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
                         <span className="text-sm text-zinc-300">Cotas vinculadas</span>
-                        <Ticket className="w-5 h-5 text-amber-300" />
+                        <Ticket className="w-5 h-5" style={{ color: buttonColor }} />
                       </div>
                     </div>
                   </div>
 
                   <div className="rounded-[1.75rem] border border-white bg-white/85 p-5 shadow-sm">
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500">Resumo ao vivo</p>
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: hexToRgba(textColor, 0.56) }}>Resumo ao vivo</p>
                     <div className="mt-4 space-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-500">Cotas vendidas</span>
-                        <span className="text-lg font-black text-zinc-950">{totalSoldTickets}</span>
+                        <span className="text-sm" style={{ color: hexToRgba(textColor, 0.62) }}>Cotas vendidas</span>
+                        <span className="text-lg font-black" style={{ color: textColor }}>{totalSoldTickets}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-500">Campanhas ativas</span>
-                        <span className="text-lg font-black text-zinc-950">{activeCampaigns.length}</span>
+                        <span className="text-sm" style={{ color: hexToRgba(textColor, 0.62) }}>Campanhas ativas</span>
+                        <span className="text-lg font-black" style={{ color: textColor }}>{activeCampaigns.length}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-500">Sorteios concluídos</span>
-                        <span className="text-lg font-black text-zinc-950">{finishedCampaigns.length}</span>
+                        <span className="text-sm" style={{ color: hexToRgba(textColor, 0.62) }}>Sorteios concluídos</span>
+                        <span className="text-lg font-black" style={{ color: textColor }}>{finishedCampaigns.length}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 p-5 shadow-sm">
+                  <div className="rounded-[1.75rem] p-5 shadow-sm" style={{ border: `1px solid ${hexToRgba(primaryColor, 0.14)}`, backgroundColor: hexToRgba(primaryColor, 0.08) }}>
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-white text-emerald-600 flex items-center justify-center border border-emerald-100">
+                      <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center" style={{ color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.14)}` }}>
                         <Users className="w-6 h-6" />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-zinc-950">Apoiadores e organizadores no mesmo fluxo</p>
-                        <p className="text-sm text-zinc-600 mt-1">Gestão clara para vender, acompanhar e premiar sem atrito.</p>
+                        <p className="text-sm font-black" style={{ color: textColor }}>Apoiadores e organizadores no mesmo fluxo</p>
+                        <p className="text-sm mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Gestão clara para vender, acompanhar e premiar sem atrito.</p>
                       </div>
                     </div>
                   </div>
@@ -3121,12 +3157,12 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
             </div>
 
             <div className="absolute -right-2 top-10 hidden md:flex items-center gap-3 rounded-2xl border border-white bg-white/90 px-4 py-3 shadow-lg">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor }}>
                 <Trophy className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">Resultado</p>
-                <p className="text-sm font-black text-zinc-950">Premiação em destaque</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: hexToRgba(textColor, 0.56) }}>Resultado</p>
+                <p className="text-sm font-black" style={{ color: textColor }}>Premiação em destaque</p>
               </div>
             </div>
           </div>
@@ -3136,27 +3172,27 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       <section className="relative px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-5">
           <div className="rounded-[2rem] border border-white bg-white/85 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(primaryColor, 0.14), color: primaryColor }}>
               <Shield className="w-6 h-6" />
             </div>
-            <h4 className="font-black text-zinc-950 text-lg">Compra segura e rastreável</h4>
-            <p className="text-zinc-600 text-sm mt-2 leading-relaxed">Cada participação fica vinculada ao comprador, com fluxo simples para conferência e auditoria.</p>
+            <h4 className="font-black text-lg" style={{ color: textColor }}>Compra segura e rastreável</h4>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>Cada participação fica vinculada ao comprador, com fluxo simples para conferência e auditoria.</p>
           </div>
 
           <div className="rounded-[2rem] border border-white bg-white/85 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor }}>
               <Zap className="w-6 h-6" />
             </div>
-            <h4 className="font-black text-zinc-950 text-lg">Pix com confirmação imediata</h4>
-            <p className="text-zinc-600 text-sm mt-2 leading-relaxed">O participante paga, a cota é confirmada e a campanha segue com menos abandono e mais agilidade.</p>
+            <h4 className="font-black text-lg" style={{ color: textColor }}>Pix com confirmação imediata</h4>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>O participante paga, a cota é confirmada e a campanha segue com menos abandono e mais agilidade.</p>
           </div>
 
           <div className="rounded-[2rem] border border-white bg-white/85 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(secondaryColor, 0.14), color: secondaryColor }}>
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h4 className="font-black text-zinc-950 text-lg">Premiação valorizada na vitrine</h4>
-            <p className="text-zinc-600 text-sm mt-2 leading-relaxed">A home destaca prêmio, campanha e urgência para dar mais desejo de participação.</p>
+            <h4 className="font-black text-lg" style={{ color: textColor }}>Premiação valorizada na vitrine</h4>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>A home destaca prêmio, campanha e urgência para dar mais desejo de participação.</p>
           </div>
         </div>
       </section>
@@ -3165,12 +3201,12 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       {finishedCampaigns.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="flex items-center gap-4 mb-12">
-            <div className="bg-gradient-to-br from-amber-300 to-orange-400 p-3 rounded-2xl shadow-lg shadow-amber-500/20 text-zinc-950">
+            <div className="p-3 rounded-2xl text-zinc-950" style={{ background: `linear-gradient(135deg, ${buttonColor}, ${secondaryColor})`, boxShadow: `0 18px 40px ${hexToRgba(buttonColor, 0.18)}` }}>
               <Trophy className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-3xl font-black text-zinc-950 tracking-tight">Ganhadores Recentes</h2>
-              <p className="text-zinc-600 font-medium mt-1">Quem participou, ganhou e ajuda a reforçar a credibilidade das próximas rifas.</p>
+              <h2 className="text-3xl font-black tracking-tight" style={{ color: textColor }}>Ganhadores Recentes</h2>
+              <p className="font-medium mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Quem participou, ganhou e ajuda a reforçar a credibilidade das próximas rifas.</p>
             </div>
           </div>
           
@@ -3198,15 +3234,15 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                         <span className="text-2xl font-black mt-0.5 leading-none">{firstWinner?.number || '---'}</span>
                       </div>
                     </div>
-                    <div className="absolute top-2 right-2 bg-amber-400 text-zinc-950 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
+                    <div className="absolute top-2 right-2 text-zinc-950 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md" style={{ backgroundColor: buttonColor }}>
                       Sorteado
                     </div>
                   </div>
 
                   <div className="text-center space-y-3">
                     <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] truncate">{c.title}</p>
-                    <h3 className="text-xl font-black text-zinc-950 truncate leading-tight group-hover:text-orange-600 transition-colors">{firstWinner?.customer || 'Ganhador'}</h3>
-                    <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-100 text-amber-700 px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wide">
+                    <h3 className="text-xl font-black truncate leading-tight transition-colors" style={{ color: textColor }}>{firstWinner?.customer || 'Ganhador'}</h3>
+                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wide" style={{ backgroundColor: hexToRgba(buttonColor, 0.10), border: `1px solid ${hexToRgba(buttonColor, 0.14)}`, color: buttonColor }}>
                       <Gift className="w-3.5 h-3.5 shrink-0" /> {firstWinner?.prize_name || 'Prêmio'}
                     </div>
                   </div>
@@ -3221,11 +3257,11 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       <section id="campanhas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 scroll-mt-24">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wider mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider mb-3" style={{ backgroundColor: hexToRgba(primaryColor, 0.10), color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.14)}` }}>
               Rifas ativas
             </div>
-            <h2 className="text-3xl md:text-4xl font-black text-zinc-950 tracking-tight">Campanhas em Destaque</h2>
-            <p className="text-zinc-600 font-medium mt-1">Escolha a campanha, veja o prêmio, compre suas cotas e acompanhe a premiação com clareza.</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Campanhas em Destaque</h2>
+            <p className="font-medium mt-1" style={{ color: hexToRgba(textColor, 0.72) }}>Escolha a campanha, veja o prêmio, compre suas cotas e acompanhe a premiação com clareza.</p>
           </div>
         </div>
 
@@ -3237,10 +3273,10 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
           {activeCampaigns.length === 0 && (
             <div className="col-span-full py-24 text-center bg-white/90 rounded-[2.5rem] border border-white shadow-[0_22px_60px_rgba(15,23,42,0.06)] max-w-xl mx-auto px-6">
               <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-amber-100">
-                <Ticket className="w-8 h-8 text-amber-500" />
+                <Ticket className="w-8 h-8" style={{ color: buttonColor }} />
               </div>
-              <h3 className="text-xl font-black text-zinc-950 mb-2">Nenhuma campanha ativa no momento</h3>
-              <p className="text-zinc-600 text-sm max-w-xs mx-auto leading-relaxed">Novas rifas estão sendo preparadas. Volte em breve para conferir os prêmios e participar.</p>
+              <h3 className="text-xl font-black mb-2" style={{ color: textColor }}>Nenhuma campanha ativa no momento</h3>
+              <p className="text-sm max-w-xs mx-auto leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>Novas rifas estão sendo preparadas. Volte em breve para conferir os prêmios e participar.</p>
             </div>
           )}
         </div>
@@ -3250,8 +3286,8 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       {landingSteps.length > 0 && (
         <section id="como-funciona" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-mt-24">
           <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-black text-zinc-950 tracking-tight">Como Funciona</h2>
-            <p className="text-zinc-600 font-medium max-w-xl mx-auto leading-relaxed">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Como Funciona</h2>
+            <p className="font-medium max-w-xl mx-auto leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>
               Uma jornada mais clara para quem organiza e também para quem quer participar e concorrer.
             </p>
           </div>
@@ -3264,14 +3300,15 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-white/85 backdrop-blur-md rounded-[2rem] border border-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.06)] hover:shadow-[0_24px_70px_rgba(251,191,36,0.12)] hover:border-amber-100 transition-all relative overflow-hidden group"
+                className="bg-white/85 backdrop-blur-md rounded-[2rem] border border-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.06)] transition-all relative overflow-hidden group"
+                style={{ boxShadow: `0 24px 70px ${hexToRgba(buttonColor, 0.10)}` }}
               >
-                <div className="absolute top-0 right-0 w-24 h-24 bg-amber-100 rounded-bl-[5rem] pointer-events-none opacity-70" />
-                <div className="w-14 h-14 bg-zinc-950 text-white rounded-2xl flex items-center justify-center font-black text-2xl mb-6 shadow-inner border border-zinc-950 group-hover:scale-110 group-hover:bg-amber-400 group-hover:text-zinc-950 transition-all duration-300">
+                <div className="absolute top-0 right-0 w-24 h-24 rounded-bl-[5rem] pointer-events-none opacity-70" style={{ backgroundColor: hexToRgba(buttonColor, 0.14) }} />
+                <div className="w-14 h-14 text-white rounded-2xl flex items-center justify-center font-black text-2xl mb-6 shadow-inner group-hover:scale-110 transition-all duration-300" style={{ backgroundColor: textColor, border: `1px solid ${textColor}` }}>
                   {i + 1}
                 </div>
-                <h3 className="text-xl font-bold text-zinc-950 mb-3">{step.title}</h3>
-                <p className="text-zinc-600 text-sm leading-relaxed">{step.text}</p>
+                <h3 className="text-xl font-bold mb-3" style={{ color: textColor }}>{step.title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: hexToRgba(textColor, 0.72) }}>{step.text}</p>
               </motion.div>
             ))}
           </div>
@@ -3282,8 +3319,8 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       {landingFeatures.length > 0 && (
         <section id="vantagens" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 scroll-mt-24">
           <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-black text-zinc-950 tracking-tight">Recursos Premium</h2>
-            <p className="text-zinc-600 font-medium">Ferramentas pensadas para destacar rifas, gerar confiança e aumentar conversão.</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: textColor }}>Recursos Premium</h2>
+            <p className="font-medium" style={{ color: hexToRgba(textColor, 0.72) }}>Ferramentas pensadas para destacar rifas, gerar confiança e aumentar conversão.</p>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
@@ -3296,12 +3333,13 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.05 }}
-                  className="bg-white/85 backdrop-blur-md rounded-3xl border border-white p-6 text-center shadow-[0_16px_40px_rgba(15,23,42,0.05)] hover:shadow-[0_22px_56px_rgba(251,191,36,0.12)] hover:scale-105 hover:border-amber-100 transition-all group"
+                  className="bg-white/85 backdrop-blur-md rounded-3xl border border-white p-6 text-center shadow-[0_16px_40px_rgba(15,23,42,0.05)] hover:scale-105 transition-all group"
+                  style={{ boxShadow: `0 22px 56px ${hexToRgba(primaryColor, 0.08)}` }}
                 >
-                  <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-amber-600 border border-amber-100 group-hover:scale-110 transition-transform">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform" style={{ backgroundColor: hexToRgba(buttonColor, 0.10), color: buttonColor, border: `1px solid ${hexToRgba(buttonColor, 0.14)}` }}>
                     <Ic className="w-6 h-6" />
                   </div>
-                  <p className="font-bold text-zinc-950 text-sm tracking-tight">{feat.title}</p>
+                  <p className="font-bold text-sm tracking-tight" style={{ color: textColor }}>{feat.title}</p>
                 </motion.div>
               );
             })}
@@ -3311,18 +3349,19 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* CTA SECTION WITH BACKGROUND IMAGE */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="relative rounded-[3rem] p-10 md:p-16 overflow-hidden shadow-[0_30px_90px_rgba(245,158,11,0.16)] border border-white bg-[linear-gradient(135deg,#fff1c9_0%,#fff9ee_40%,#ffffff_100%)]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.22),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_32%)] pointer-events-none" />
+        <div className="relative rounded-[3rem] p-10 md:p-16 overflow-hidden border border-white" style={{ boxShadow: `0 30px 90px ${hexToRgba(buttonColor, 0.16)}`, background: `linear-gradient(135deg, ${hexToRgba(buttonColor, 0.20)} 0%, #ffffff 42%, ${hexToRgba(primaryColor, 0.12)} 100%)` }}>
+          <img src="/winner-celebration.png" alt="Pessoa comemorando vitória em sorteio com troféu" className="absolute inset-0 w-full h-full object-cover opacity-18" />
+          <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at top left, ${hexToRgba(buttonColor, 0.22)}, transparent 30%), radial-gradient(circle at bottom right, ${hexToRgba(primaryColor, 0.14)}, transparent 32%)` }} />
           <div className="absolute top-8 right-8 w-28 h-28 rounded-[2rem] bg-white/70 border border-white rotate-6 shadow-lg hidden md:flex items-center justify-center">
-            <Trophy className="w-10 h-10 text-amber-500" />
+            <Trophy className="w-10 h-10" style={{ color: buttonColor }} />
           </div>
 
           <div className="relative z-10 max-w-3xl mx-auto space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 text-amber-700 border border-amber-100 text-xs font-bold shadow-sm uppercase tracking-wider mx-auto">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 text-xs font-bold shadow-sm uppercase tracking-wider mx-auto" style={{ color: buttonColor, border: `1px solid ${hexToRgba(buttonColor, 0.14)}` }}>
               <Rocket className="w-4 h-4" /> Comece hoje
             </div>
-            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight max-w-2xl mx-auto text-zinc-950">{ctaText}</h2>
-            <p className="text-zinc-600 text-base md:text-lg font-medium leading-relaxed max-w-xl mx-auto">
+            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight max-w-2xl mx-auto" style={{ color: textColor }}>{ctaText}</h2>
+            <p className="text-base md:text-lg font-medium leading-relaxed max-w-xl mx-auto" style={{ color: hexToRgba(textColor, 0.72) }}>
               Monte uma vitrine bonita para suas rifas, destaque premiações e gerencie pagamentos Pix com uma experiência mais profissional.
             </p>
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -3334,11 +3373,12 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                     onNavigate('login');
                   }
                 }}
-                className="bg-zinc-950 hover:bg-zinc-800 text-white font-black text-base md:text-lg px-12 py-5 rounded-2xl transition-all shadow-xl shadow-zinc-900/10 flex items-center justify-center gap-3"
+                className="text-white font-black text-base md:text-lg px-12 py-5 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3"
+                style={{ backgroundColor: buttonColor, boxShadow: `0 18px 40px ${hexToRgba(buttonColor, 0.22)}` }}
               >
                 <Rocket className="w-5 h-5" /> Criar minha campanha
               </button>
-              <a href="#campanhas" className="text-zinc-900 font-bold px-8 py-4 rounded-2xl border border-zinc-200 bg-white/80 hover:bg-white transition-all">
+              <a href="#campanhas" className="font-bold px-8 py-4 rounded-2xl bg-white/80 hover:bg-white transition-all" style={{ color: textColor, border: `1px solid ${hexToRgba(primaryColor, 0.14)}` }}>
                 Quero participar agora
               </a>
             </div>
@@ -3350,19 +3390,20 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       {landingFaq.length > 0 && (
         <section id="duvidas" className="max-w-4xl mx-auto px-4 py-20 scroll-mt-24">
           <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl font-black text-zinc-950 tracking-tight">Dúvidas Frequentes</h2>
-            <p className="text-zinc-600 font-medium">Tudo o que importa para entender a compra, a criação e a transparência das rifas.</p>
+            <h2 className="text-3xl font-black tracking-tight" style={{ color: textColor }}>Dúvidas Frequentes</h2>
+            <p className="font-medium" style={{ color: hexToRgba(textColor, 0.72) }}>Tudo o que importa para entender a compra, a criação e a transparência das rifas.</p>
           </div>
           
           <div className="grid grid-cols-1 gap-4 max-w-3xl mx-auto">
             {landingFaq.map((faq: any, i: number) => (
-              <div key={i} className="bg-white/90 backdrop-blur-md rounded-2xl border border-white shadow-[0_16px_40px_rgba(15,23,42,0.05)] overflow-hidden transition-all hover:border-amber-100">
+              <div key={i} className="bg-white/90 backdrop-blur-md rounded-2xl border border-white shadow-[0_16px_40px_rgba(15,23,42,0.05)] overflow-hidden transition-all">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full px-6 py-5 text-left flex items-center justify-between hover:bg-amber-50/60 transition-all focus:outline-none"
+                  className="w-full px-6 py-5 text-left flex items-center justify-between transition-all focus:outline-none"
+                  style={{ backgroundColor: openFaq === i ? hexToRgba(buttonColor, 0.08) : 'transparent' }}
                 >
-                  <span className="font-bold text-zinc-950 text-sm md:text-base leading-snug">{faq.question}</span>
-                  <ChevronDown className={`w-5 h-5 text-zinc-400 shrink-0 transition-transform duration-300 ${openFaq === i ? 'rotate-180 text-amber-500' : ''}`} />
+                  <span className="font-bold text-sm md:text-base leading-snug" style={{ color: textColor }}>{faq.question}</span>
+                  <ChevronDown className={`w-5 h-5 text-zinc-400 shrink-0 transition-transform duration-300 ${openFaq === i ? 'rotate-180' : ''}`} style={{ color: openFaq === i ? buttonColor : hexToRgba(textColor, 0.48) }} />
                 </button>
                 <AnimatePresence initial={false}>
                   {openFaq === i && (
@@ -3372,7 +3413,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.25, ease: 'easeInOut' }}
                     >
-                      <div className="px-6 pb-6 text-zinc-600 text-xs md:text-sm leading-relaxed border-t border-zinc-100 pt-4">
+                      <div className="px-6 pb-6 text-xs md:text-sm leading-relaxed border-t pt-4" style={{ color: hexToRgba(textColor, 0.72), borderColor: hexToRgba(primaryColor, 0.10) }}>
                         {faq.answer}
                       </div>
                     </motion.div>
