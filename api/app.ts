@@ -492,9 +492,6 @@ export async function createApp(options: AppOptions = {}) {
       if (ogImage && ogImage.startsWith("data:")) {
         ogImage = "/logo.png";
       }
-      if (ogImage && ogImage.includes("github.com")) {
-        ogImage = "/logo.png";
-      }
       if (!ogImage) {
         ogImage = "/logo.png";
       }
