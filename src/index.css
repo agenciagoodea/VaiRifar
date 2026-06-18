@@ -27,11 +27,31 @@
 }
 
 .btn-primary {
-  @apply bg-brand-orange text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-orange-100 hover:scale-[1.02] active:scale-[0.98] transition-all;
+  @apply text-white px-6 py-3 rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all;
+  background-color: var(--primary-color);
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--primary-color) 22%, transparent);
 }
 
 .btn-secondary {
-  @apply bg-brand-green text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:scale-[1.02] active:scale-[0.98] transition-all;
+  @apply text-white px-6 py-3 rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all;
+  background-color: var(--primary-color);
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--primary-color) 22%, transparent);
+}
+
+button[class*="bg-brand-orange"],
+button[class*="bg-emerald-600"],
+a[class*="bg-brand-orange"],
+a[class*="bg-emerald-600"] {
+  background-color: var(--primary-color) !important;
+  color: #fff !important;
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--primary-color) 22%, transparent) !important;
+}
+
+button[class*="bg-brand-orange"]:hover,
+button[class*="bg-emerald-600"]:hover,
+a[class*="bg-brand-orange"]:hover,
+a[class*="bg-emerald-600"]:hover {
+  background-color: color-mix(in srgb, var(--primary-color) 88%, black) !important;
 }
 
 @layer base {

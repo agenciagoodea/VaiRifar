@@ -1308,7 +1308,7 @@ const PublishModal = ({ campaign, onClose, onPublished, settings, globalSettings
 };
 
 // --- Componentes de Configuração de Pagamento ---
-const PixConfigPanel = ({ user, onBack }: { user: User, onBack: () => void }) => {
+const PixConfigPanel = ({ user, onBack, onSaved }: { user: User, onBack: () => void, onSaved?: () => void }) => {
   const [pixType, setPixType] = useState('cpf');
   const [pixKey, setPixKey] = useState('');
   const [pixName, setPixName] = useState('');
@@ -1348,6 +1348,7 @@ const PixConfigPanel = ({ user, onBack }: { user: User, onBack: () => void }) =>
           pix_holder_name: pixName
         })
       });
+      onSaved?.();
       alert('Configuração PIX salva com sucesso!');
     } catch (err: any) {
       alert(err.message || 'Erro ao salvar');
@@ -2990,105 +2991,105 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
       <div className="absolute top-28 left-8 w-40 h-40 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: hexToRgba(secondaryColor, 0.24) }} />
       <div className="absolute top-44 right-0 w-72 h-72 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: hexToRgba(primaryColor, 0.18) }} />
 
-      <section className="relative pt-20 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-14 items-center">
-          <div className="space-y-8 lg:col-span-6 text-left">
-            <div
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/85 text-xs font-black shadow-sm tracking-[0.18em] uppercase"
-              style={{ color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
-            >
-              <Trophy className="w-3.5 h-3.5" /> Plataforma clara para rifas e premiações
-            </div>
+      <section className="relative pt-0 pb-16 w-full">
+        <div
+          className="relative overflow-hidden min-h-[720px] px-4 py-10 sm:px-8 lg:px-14 lg:py-14 xl:px-20"
+          style={{ boxShadow: `0 36px 90px ${hexToRgba(buttonColor, 0.18)}` }}
+        >
+          <img src="/banner-rifa.png" alt="Banner promocional de rifa com celular, taça, prêmios e estádio ao fundo" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${hexToRgba(backgroundColor, 0.94)} 0%, ${hexToRgba(backgroundColor, 0.84)} 30%, ${hexToRgba(backgroundColor, 0.16)} 72%, ${hexToRgba(textColor, 0.08)} 100%)` }} />
+          <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at top left, ${hexToRgba(primaryColor, 0.18)}, transparent 28%), radial-gradient(circle at center right, ${hexToRgba(buttonColor, 0.22)}, transparent 30%), linear-gradient(180deg, transparent 0%, ${hexToRgba(textColor, 0.08)} 100%)` }} />
 
-            <div className="space-y-5">
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[0.95]" style={{ color: textColor }}>
-                Rifas online com
-                <span
-                  className="block text-transparent bg-clip-text"
-                  style={{ backgroundImage: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }}
-                >
-                  cara de prêmio grande
-                </span>
-              </h1>
-              <p className="text-lg md:text-xl font-medium max-w-2xl leading-relaxed" style={{ color: hexToRgba(textColor, 0.76) }}>
-                Crie campanhas bonitas, acompanhe pagamentos por Pix e destaque prêmios reais com uma experiência mais leve, confiável e feita para conversão.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4 pt-1">
-              <a
-                href="#campanhas"
-                className="text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-lg transition-all text-center flex items-center justify-center gap-2"
-                style={{ backgroundColor: buttonColor, boxShadow: `0 18px 40px ${hexToRgba(buttonColor, 0.22)}` }}
+          <div className="relative max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center min-h-[620px]">
+            <div className="space-y-8 lg:col-span-6 text-left">
+              <div
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-md text-xs font-black shadow-sm tracking-[0.18em] uppercase"
+                style={{ color: primaryColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
               >
-                <Ticket className="w-5 h-5" /> Ver rifas em destaque
-              </a>
-              <button
-                onClick={() => {
-                  const el = document.getElementById('como-funciona');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="bg-white/90 font-bold text-base px-8 py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm"
-                style={{ color: textColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
-              >
-                <Play className="w-5 h-5" style={{ color: primaryColor }} /> Como funciona
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-              <div className="rounded-[1.75rem] border border-white/80 bg-white/80 backdrop-blur-sm p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{activeCampaigns.length}+</p>
-                <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>rifas abertas agora</p>
+                <Trophy className="w-3.5 h-3.5" /> Plataforma clara para rifas e premiações
               </div>
-              <div className="rounded-[1.75rem] border border-white/80 bg-white/80 backdrop-blur-sm p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{totalActiveTickets > 0 ? totalActiveTickets : 100}%</p>
-                <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>números prontos para venda</p>
-              </div>
-              <div className="rounded-[1.75rem] border border-white/80 bg-white/80 backdrop-blur-sm p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{lowestTicketPrice > 0 ? formatCurrency(lowestTicketPrice) : 'Pix'}</p>
-                <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>entrada rápida para participar</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="lg:col-span-6 relative">
-            <div
-              className="relative rounded-[2.8rem] border border-white/70 overflow-hidden min-h-[520px] shadow-[0_30px_80px_rgba(15,23,42,0.16)]"
-              style={{ boxShadow: `0 30px 80px ${hexToRgba(buttonColor, 0.18)}` }}
-            >
-              <img src="/hero-bg.png" alt="Troféu dourado com bilhetes de rifa voando" className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${hexToRgba(textColor, 0.18)} 0%, ${hexToRgba(backgroundColor, 0.44)} 32%, ${hexToRgba(backgroundColor, 0.10)} 100%)` }} />
-              <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at top left, ${hexToRgba(primaryColor, 0.22)}, transparent 30%), radial-gradient(circle at bottom right, ${hexToRgba(buttonColor, 0.22)}, transparent 34%)` }} />
-
-              <div className="relative h-full p-6 sm:p-8 flex flex-col justify-end">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={showcaseCampaign?.id || heroIndex}
-                    initial={{ opacity: 0, x: 24 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -24 }}
-                    transition={{ duration: 0.35, ease: 'easeOut' }}
-                    className="rounded-[2rem] bg-white/80 backdrop-blur-xl border border-white/70 p-5 sm:p-6 max-w-[420px] shadow-2xl"
+              <div className="space-y-5 max-w-2xl">
+                <h1 className="text-5xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[0.92]" style={{ color: textColor }}>
+                  Rifas online com
+                  <span
+                    className="block text-transparent bg-clip-text"
+                    style={{ backgroundImage: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }}
                   >
-                    <div className="flex items-center justify-between gap-4 mb-5">
+                    presença de campanha grande
+                  </span>
+                </h1>
+                <p className="text-lg md:text-2xl font-medium leading-relaxed" style={{ color: hexToRgba(textColor, 0.78) }}>
+                  Um hero mais forte, com prêmios, estádio e energia de sorteio real. Sua landing passa sensação de valor antes mesmo do clique.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                <a
+                  href="#campanhas"
+                  className="text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-lg transition-all text-center flex items-center justify-center gap-2"
+                  style={{ backgroundColor: buttonColor, boxShadow: `0 18px 40px ${hexToRgba(buttonColor, 0.24)}` }}
+                >
+                  <Ticket className="w-5 h-5" /> Ver rifas em destaque
+                </a>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('como-funciona');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="bg-white/80 backdrop-blur-md font-bold text-base px-8 py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                  style={{ color: textColor, border: `1px solid ${hexToRgba(primaryColor, 0.18)}` }}
+                >
+                  <Play className="w-5 h-5" style={{ color: primaryColor }} /> Como funciona
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5 max-w-3xl">
+                <div className="rounded-[1.75rem] border border-white/70 bg-white/76 backdrop-blur-md p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+                  <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{activeCampaigns.length}+</p>
+                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>rifas abertas agora</p>
+                </div>
+                <div className="rounded-[1.75rem] border border-white/70 bg-white/76 backdrop-blur-md p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+                  <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{totalActiveTickets > 0 ? totalActiveTickets : 100}%</p>
+                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>números disponíveis</p>
+                </div>
+                <div className="rounded-[1.75rem] border border-white/70 bg-white/76 backdrop-blur-md p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+                  <p className="text-2xl sm:text-3xl font-black" style={{ color: textColor }}>{lowestTicketPrice > 0 ? formatCurrency(lowestTicketPrice) : 'Pix'}</p>
+                  <p className="text-sm mt-1 leading-snug" style={{ color: hexToRgba(textColor, 0.62) }}>entrada rápida para participar</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6 relative min-h-[420px] flex items-center justify-center lg:justify-end">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={showcaseCampaign?.id || heroIndex}
+                  initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -20, scale: 0.96 }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  className="w-full max-w-[450px] rounded-[2.2rem] border border-white/70 bg-white/76 backdrop-blur-xl shadow-2xl overflow-hidden"
+                >
+                  <div className="p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-4 mb-5">
                       <div>
                         <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: primaryColor }}>Rifa ativa</p>
                         <h3 className="text-2xl sm:text-3xl font-black mt-2 leading-tight" style={{ color: textColor }}>
                           {showcaseCampaign?.title || 'Rifas em destaque'}
                         </h3>
                       </div>
-                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: hexToRgba(buttonColor, 0.14), color: buttonColor }}>
-                        <Ticket className="w-7 h-7" />
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: hexToRgba(primaryColor, 0.14), color: primaryColor }}>
+                        <Gift className="w-7 h-7" />
                       </div>
                     </div>
 
-                    <div className="relative rounded-[1.5rem] overflow-hidden mb-5">
+                    <div className="relative rounded-[1.7rem] overflow-hidden mb-5">
                       <img
                         src={showcaseCampaign?.image_url || '/winner-celebration.png'}
                         alt={showcaseCampaign?.title || 'Campanha ativa'}
-                        className="w-full h-52 object-cover"
+                        className="w-full h-56 object-cover"
                       />
-                      <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, transparent 0%, ${hexToRgba(textColor, 0.68)} 100%)` }} />
+                      <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, transparent 12%, ${hexToRgba(textColor, 0.78)} 100%)` }} />
                       <div className="absolute left-4 right-4 bottom-4 flex items-end justify-between gap-4 text-white">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-80">A partir de</p>
@@ -3101,36 +3102,44 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
                       </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       <div className="flex items-center justify-between text-sm font-bold" style={{ color: hexToRgba(textColor, 0.74) }}>
                         <span>Andamento da rifa</span>
                         <span>{showcaseProgress}% emitido</span>
                       </div>
                       <div className="h-3 rounded-full bg-zinc-200/80 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${showcaseProgress}%`, background: `linear-gradient(90deg, ${buttonColor}, ${secondaryColor}, ${primaryColor})` }} />
+                        <div className="h-full rounded-full" style={{ width: `${showcaseProgress}%`, background: `linear-gradient(90deg, ${primaryColor}, ${buttonColor})` }} />
                       </div>
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-
-                {heroCampaigns.length > 1 && (
-                  <div className="flex items-center gap-2 mt-5 ml-2">
-                    {heroCampaigns.map((campaign, index) => (
                       <button
-                        key={campaign.id}
                         type="button"
-                        onClick={() => setHeroIndex(index)}
-                        className="h-2.5 rounded-full transition-all"
-                        style={{
-                          width: index === heroIndex ? '2.5rem' : '0.7rem',
-                          backgroundColor: index === heroIndex ? buttonColor : hexToRgba('#ffffff', 0.58)
-                        }}
-                        aria-label={`Ir para a rifa ${index + 1}`}
-                      />
-                    ))}
+                        onClick={() => showcaseCampaign && onSelectCampaign(showcaseCampaign)}
+                        className="w-full text-white font-black text-base py-4 rounded-2xl shadow-lg transition-all"
+                        style={{ backgroundColor: primaryColor, boxShadow: `0 18px 36px ${hexToRgba(primaryColor, 0.24)}` }}
+                      >
+                        Participar agora
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
+                </motion.div>
+              </AnimatePresence>
+
+              {heroCampaigns.length > 1 && (
+                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2">
+                  {heroCampaigns.map((campaign, index) => (
+                    <button
+                      key={campaign.id}
+                      type="button"
+                      onClick={() => setHeroIndex(index)}
+                      className="h-2.5 rounded-full transition-all backdrop-blur-sm"
+                      style={{
+                        width: index === heroIndex ? '2.8rem' : '0.75rem',
+                        backgroundColor: index === heroIndex ? primaryColor : hexToRgba('#ffffff', 0.74)
+                      }}
+                      aria-label={`Ir para a rifa ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -6725,6 +6734,10 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
     setLocalSettings(globalSettings);
   }, [globalSettings]);
 
+  useEffect(() => {
+    fetchPixConfig();
+  }, [user.id]);
+
   const fetchLgpdData = async () => {
     setLoadingConsents(true);
     setLoadingRequests(true);
@@ -8086,6 +8099,8 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [localSettings, setLocalSettings] = useState<any>(globalSettings);
+  const [pixConfig, setPixConfig] = useState<any>(null);
+  const [pixConfigLoaded, setPixConfigLoaded] = useState(false);
 
   // States para Supporters
   const [selectedSupporter, setSelectedSupporter] = useState<any>(null);
@@ -8149,6 +8164,52 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
   const [primaryColor, setPrimaryColor] = useState(user.primary_color || '#ff6b00');
   const [logoUrl, setLogoUrl] = useState(user.logo_url || '');
   const [logoPreview, setLogoPreview] = useState(user.logo_url || '');
+  const hasPixConfig = Boolean(
+    pixConfig?.pix_key?.toString().trim() &&
+    pixConfig?.pix_holder_name?.toString().trim()
+  );
+
+  const fetchPixConfig = async () => {
+    try {
+      const { config } = await fetchJsonWithAuth('/api/payment-configs/me');
+      setPixConfig(config || null);
+    } catch (err) {
+      console.error('Erro ao carregar configuraÃ§Ã£o PIX:', err);
+      setPixConfig(null);
+    } finally {
+      setPixConfigLoaded(true);
+    }
+  };
+
+  const openPixConfigRequired = () => {
+    alert('Antes de criar uma campanha, cadastre sua chave PIX para receber os pagamentos diretamente no seu banco.');
+    setShowCreate(false);
+    setEditingCampaign(null);
+    setActiveTab('settings');
+    setSettingsTab('pix-config');
+    try { localStorage.setItem('rifapro-dashboard-tab', 'settings'); } catch { /* ignorar */ }
+  };
+
+  const handleOpenCreateCampaign = (campaignToEdit?: Campaign | null) => {
+    if (campaignToEdit) {
+      setEditingCampaign(campaignToEdit);
+      setShowCreate(true);
+      return;
+    }
+
+    if (!pixConfigLoaded) {
+      alert('Aguarde um instante enquanto validamos sua configuraÃ§Ã£o PIX.');
+      return;
+    }
+
+    if (!hasPixConfig) {
+      openPixConfigRequired();
+      return;
+    }
+
+    setEditingCampaign(null);
+    setShowCreate(true);
+  };
 
   const handleUpdateSocial = async () => {
     try {
@@ -8521,7 +8582,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
             campaign={selectedCampaignForManagement}
             onBack={() => setActiveTab('dashboard')}
             onView={onSelectCampaign}
-            onEdit={(c) => { setEditingCampaign(c); setShowCreate(true); }}
+            onEdit={(c) => { handleOpenCreateCampaign(c); }}
             globalSettings={globalSettings}
             onRefresh={fetchData}
             setShowOrderDetails={setShowOrderDetails}
@@ -8645,7 +8706,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
                 ) : (
                   <div className="glass-card p-12 text-center col-span-full">
                     <p className="text-zinc-400 font-medium">Você ainda não possui campanhas.</p>
-                    <button onClick={() => setShowCreate(true)} className="text-brand-orange font-bold mt-2">Criar minha primeira rifa</button>
+                    <button onClick={() => handleOpenCreateCampaign()} className="text-brand-orange font-bold mt-2">Criar minha primeira rifa</button>
                   </div>
                 )}
               </div>
@@ -9082,7 +9143,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
         );
 
         if (settingsTab === 'pix-config') return (
-          <PixConfigPanel user={user} onBack={() => setSettingsTab('payments')} />
+          <PixConfigPanel user={user} onBack={() => setSettingsTab('payments')} onSaved={fetchPixConfig} />
         );
 
 
@@ -9456,7 +9517,10 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
           <CreateCampaignModal
             user={user}
             onClose={() => { setShowCreate(false); setEditingCampaign(null); }}
-            onCreated={fetchData}
+            onCreated={() => {
+              fetchData();
+              fetchPixConfig();
+            }}
             initialData={editingCampaign || undefined}
             globalSettings={globalSettings}
           />
@@ -9466,7 +9530,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
         activeTab={activeTab}
         onNavigate={(tab) => {
           if (tab === 'create-campaign') {
-            setShowCreate(true);
+            handleOpenCreateCampaign();
           } else {
             setActiveTab(tab);
             try { localStorage.setItem('rifapro-dashboard-tab', tab); } catch { /* ignorar */ }
