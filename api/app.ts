@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import { Jimp } from "jimp";
 
 dotenv.config();
 
@@ -755,42 +756,75 @@ Sitemap: ${siteUrl}/sitemap.xml`;
       }, {});
 
       let logoUrl = settingsMap.site_logo_url || settingsMap.seo_share_image || settingsMap.seo_og_image || "";
-      
+      let logoBuffer: Buffer | null = null;
+      let contentType = "image/png";
+
       if (logoUrl && logoUrl.startsWith("data:")) {
         const matches = logoUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (matches && matches.length === 3) {
-          const contentType = matches[1];
-          const buffer = Buffer.from(matches[2], 'base64');
-          res.type(contentType);
-          res.set("Cache-Control", "public, max-age=86400");
-          return res.send(buffer);
+          contentType = matches[1];
+          logoBuffer = Buffer.from(matches[2], 'base64');
         }
-      }
-
-      if (logoUrl && (logoUrl.startsWith("http://") || logoUrl.startsWith("https://"))) {
+      } else if (logoUrl && (logoUrl.startsWith("http://") || logoUrl.startsWith("https://"))) {
         try {
           const response = await fetch(logoUrl);
           if (response.ok) {
-            const buffer = Buffer.from(await response.arrayBuffer());
-            res.type(response.headers.get("content-type") || "image/png");
-            res.set("Cache-Control", "public, max-age=86400");
-            return res.send(buffer);
+            contentType = response.headers.get("content-type") || "image/png";
+            logoBuffer = Buffer.from(await response.arrayBuffer());
           }
         } catch (fetchErr) {
           console.error("Erro ao fazer fetch da imagem externa:", fetchErr);
         }
       }
 
-      // Fallback para o favicon se o logo falhar
-      const faviconUrl = settingsMap.site_favicon_url || settingsMap.seo_favicon_url || "";
-      if (faviconUrl && faviconUrl.startsWith("data:")) {
-        const matches = faviconUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-        if (matches && matches.length === 3) {
-          const contentType = matches[1];
-          const buffer = Buffer.from(matches[2], 'base64');
+      // Se não encontrou o logo, tenta o favicon
+      if (!logoBuffer) {
+        const faviconUrl = settingsMap.site_favicon_url || settingsMap.seo_favicon_url || "";
+        if (faviconUrl && faviconUrl.startsWith("data:")) {
+          const matches = faviconUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches && matches.length === 3) {
+            contentType = matches[1];
+            logoBuffer = Buffer.from(matches[2], 'base64');
+          }
+        }
+      }
+
+      if (logoBuffer) {
+        try {
+          // Processar imagem com Jimp para preencher no tamanho 1200x630 com fundo branco
+          const original = await Jimp.read(logoBuffer);
+          
+          const targetWidth = 1200;
+          const targetHeight = 630;
+          const margin = 80;
+          
+          const maxInnerWidth = targetWidth - (margin * 2);
+          const maxInnerHeight = targetHeight - (margin * 2);
+          
+          const scaleX = maxInnerWidth / original.width;
+          const scaleY = maxInnerHeight / original.height;
+          const scale = Math.min(scaleX, scaleY, 1.0); // Não aumentar tamanho se já for menor
+          
+          const newWidth = Math.round(original.width * scale);
+          const newHeight = Math.round(original.height * scale);
+          
+          const resized = original.resize({ w: newWidth, h: newHeight });
+          const background = new Jimp({ width: targetWidth, height: targetHeight, color: 0xffffffff });
+          
+          const x = Math.round((targetWidth - newWidth) / 2);
+          const y = Math.round((targetHeight - newHeight) / 2);
+          
+          background.composite(resized, x, y);
+          
+          const outBuffer = await background.getBuffer("image/png");
+          res.type("image/png");
+          res.set("Cache-Control", "public, max-age=86400");
+          return res.send(outBuffer);
+        } catch (jimpErr) {
+          console.error("Erro ao processar imagem com Jimp, servindo original:", jimpErr);
           res.type(contentType);
           res.set("Cache-Control", "public, max-age=86400");
-          return res.send(buffer);
+          return res.send(logoBuffer);
         }
       }
 
