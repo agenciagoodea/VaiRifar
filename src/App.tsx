@@ -17,7 +17,7 @@ import {
   CreditCard,
   QrCode,
   Menu,
-  Map,
+  Map as MapIcon,
   X,
   Mail,
   Settings as SettingsIcon,
@@ -6143,7 +6143,7 @@ const SeoSettingsPanel = ({ globalSettings, onRefreshSettings, user }: { globalS
             <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-8 space-y-4">
               <div>
                 <h4 className="font-bold text-zinc-900 text-sm flex items-center gap-2">
-                  <Map className="w-4 h-4 text-emerald-600 animate-bounce" /> Sitemaps e Indexação
+                  <MapIcon className="w-4 h-4 text-emerald-600 animate-bounce" /> Sitemaps e Indexação
                 </h4>
                 <p className="text-xs text-zinc-500 font-medium mt-1">O sistema gera automaticamente arquivos XML e robots.txt dinâmicos. Envie os links abaixo no seu Google Search Console para acelerar a indexação das suas páginas e rifas.</p>
               </div>
