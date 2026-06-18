@@ -6817,9 +6817,7 @@ const SuperAdminDashboard = ({ user, globalSettings, onRefreshSettings, onLogout
     setLocalSettings(globalSettings);
   }, [globalSettings]);
 
-  useEffect(() => {
-    fetchPixConfig();
-  }, [user.id]);
+
 
   const fetchLgpdData = async () => {
     setLoadingConsents(true);
@@ -8526,6 +8524,7 @@ const Dashboard = ({ user, onSelectCampaign, globalSettings, onRefreshSettings, 
 
   useEffect(() => {
     fetchData();
+    fetchPixConfig();
   }, [user.id]);
 
   const handleApproveOrder = async (orderId: number) => {
