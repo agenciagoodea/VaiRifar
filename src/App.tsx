@@ -1470,11 +1470,24 @@ const MpConfigPanel = ({ user, onBack }: { user: User, onBack: () => void }) => 
 const Navbar = ({ user, onLogout, onNavigate, settings }: { user: User | null, onLogout: () => void, onNavigate: (page: string) => void, settings: any }) => {
   const [isOpen, setIsOpen] = useState(false);
 
+  const handleScrollToSection = (sectionId: string) => {
+    onNavigate('home');
+    setIsOpen(false);
+    setTimeout(() => {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 100);
+  };
+
   return (
     <nav className="bg-white border-b border-zinc-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
-          <div className="flex items-center cursor-pointer" onClick={() => onNavigate('home')}>
+          <div className="flex items-center cursor-pointer" onClick={() => handleScrollToSection('home')}>
             {settings?.site_logo_url ? (
               <img src={settings.site_logo_url} alt="Logo" className="h-14 w-auto object-contain" />
             ) : (
@@ -1483,11 +1496,16 @@ const Navbar = ({ user, onLogout, onNavigate, settings }: { user: User | null, o
           </div>
 
           {/* Desktop */}
-          <div className="hidden md:flex items-center gap-8">
-            <button onClick={() => onNavigate('home')} className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Explorar</button>
+          <div className="hidden md:flex items-center gap-6">
+            <button onClick={() => handleScrollToSection('home')} className="text-sm font-medium text-zinc-600 hover:text-[var(--primary-color)] transition-colors">Início</button>
+            <button onClick={() => handleScrollToSection('campanhas')} className="text-sm font-medium text-zinc-600 hover:text-[var(--primary-color)] transition-colors">Sorteios</button>
+            <button onClick={() => handleScrollToSection('como-funciona')} className="text-sm font-medium text-zinc-600 hover:text-[var(--primary-color)] transition-colors">Como Funciona</button>
+            <button onClick={() => handleScrollToSection('vantagens')} className="text-sm font-medium text-zinc-600 hover:text-[var(--primary-color)] transition-colors">Vantagens</button>
+            <button onClick={() => handleScrollToSection('duvidas')} className="text-sm font-medium text-zinc-600 hover:text-[var(--primary-color)] transition-colors">Dúvidas</button>
+            
             {user ? (
               <>
-                <button onClick={() => onNavigate('dashboard')} className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Meu Painel</button>
+                <button onClick={() => onNavigate('dashboard')} className="text-sm font-medium text-zinc-600 hover:text-[var(--primary-color)] pr-2 pl-4 border-l border-zinc-100 transition-colors">Meu Painel</button>
                 <div className="flex items-center gap-3 pl-4 border-l border-zinc-100">
                   <div className="text-right">
                     <p className="text-xs font-semibold text-zinc-900">{user.name}</p>
@@ -1499,7 +1517,11 @@ const Navbar = ({ user, onLogout, onNavigate, settings }: { user: User | null, o
                 </div>
               </>
             ) : (
-              <button onClick={() => onNavigate('login')} className="bg-zinc-900 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-zinc-800 transition-all">
+              <button 
+                onClick={() => onNavigate('login')} 
+                style={{ backgroundColor: settings?.primary_color || '#00d18e' }}
+                className="text-white px-5 py-2 rounded-full text-sm font-medium hover:opacity-90 active:scale-[0.98] transition-all shadow-sm"
+              >
                 Entrar / Criar Rifa
               </button>
             )}
@@ -1524,14 +1546,24 @@ const Navbar = ({ user, onLogout, onNavigate, settings }: { user: User | null, o
             className="md:hidden bg-white border-t border-zinc-100 overflow-hidden"
           >
             <div className="px-4 py-6 space-y-4">
-              <button onClick={() => { onNavigate('home'); setIsOpen(false); }} className="block w-full text-left text-lg font-medium text-zinc-900">Explorar</button>
+              <button onClick={() => handleScrollToSection('home')} className="block w-full text-left text-lg font-medium text-zinc-900">Início</button>
+              <button onClick={() => handleScrollToSection('campanhas')} className="block w-full text-left text-lg font-medium text-zinc-900">Sorteios</button>
+              <button onClick={() => handleScrollToSection('como-funciona')} className="block w-full text-left text-lg font-medium text-zinc-900">Como Funciona</button>
+              <button onClick={() => handleScrollToSection('vantagens')} className="block w-full text-left text-lg font-medium text-zinc-900">Vantagens</button>
+              <button onClick={() => handleScrollToSection('duvidas')} className="block w-full text-left text-lg font-medium text-zinc-900">Dúvidas</button>
               {user ? (
                 <>
-                  <button onClick={() => { onNavigate('dashboard'); setIsOpen(false); }} className="block w-full text-left text-lg font-medium text-zinc-900">Meu Painel</button>
+                  <button onClick={() => { onNavigate('dashboard'); setIsOpen(false); }} className="block w-full text-left text-lg font-medium text-zinc-900 border-t border-zinc-100 pt-4">Meu Painel</button>
                   <button onClick={() => { onLogout(); setIsOpen(false); }} className="block w-full text-left text-lg font-medium text-red-600">Sair</button>
                 </>
               ) : (
-                <button onClick={() => { onNavigate('login'); setIsOpen(false); }} className="block w-full text-center bg-zinc-900 text-white py-3 rounded-xl font-medium">Entrar</button>
+                <button 
+                  onClick={() => { onNavigate('login'); setIsOpen(false); }} 
+                  style={{ backgroundColor: settings?.primary_color || '#00d18e' }}
+                  className="block w-full text-center text-white py-3 rounded-xl font-medium hover:opacity-90 transition-all"
+                >
+                  Entrar / Criar Rifa
+                </button>
               )}
             </div>
           </motion.div>
@@ -2948,7 +2980,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* HOW IT WORKS */}
       {howItWorks.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <section id="como-funciona" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-24">
           <div className="text-center mb-16 space-y-2">
             <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Como Funciona</h2>
             <p className="text-zinc-500 font-medium">É muito simples e rápido participar dos nossos sorteios!</p>
@@ -2978,7 +3010,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* FEATURES */}
       {features.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <section id="vantagens" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-24">
           <div className="text-center mb-16 space-y-2">
             <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">Tudo que Você Precisa</h2>
             <p className="text-zinc-500 font-medium">Oferecemos recursos premium para dar total segurança aos participantes.</p>
@@ -3039,7 +3071,7 @@ const HomePage = ({ campaigns, onSelectCampaign, settings, onNavigate, user }: {
 
       {/* FAQ SECTION */}
       {faqItems.length > 0 && (
-        <section className="max-w-3xl mx-auto px-4 py-12">
+        <section id="duvidas" className="max-w-3xl mx-auto px-4 py-12 scroll-mt-24">
           <div className="text-center mb-12 space-y-2">
             <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Dúvidas Frequentes</h2>
             <p className="text-zinc-500 font-medium">Tudo o que você precisa saber sobre como participar ou organizar sorteios.</p>
