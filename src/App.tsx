@@ -9807,7 +9807,11 @@ const LoginPage = ({ onLogin, onNavigate }: { onLogin: (u: User) => void, onNavi
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${prodOrigin}/`
+          redirectTo: `${prodOrigin}/`,
+          queryParams: {
+            prompt: 'select_account', // Força exibição da tela de seleção de conta Google
+            access_type: 'online',
+          }
         }
       });
       if (error) throw error;
